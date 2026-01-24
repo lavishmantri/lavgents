@@ -6,10 +6,13 @@ import { Observability, DefaultExporter, CloudExporter, SensitiveDataFilter } fr
 import { weatherWorkflow } from './workflows/weather-workflow';
 import { weatherAgent } from './agents/weather-agent';
 import { toolCallAppropriatenessScorer, completenessScorer, translationScorer } from './scorers/weather-scorer';
+import { emailClassificationWorkflow } from './workflows/email-classification-workflow';
+import { gmailBatchClassificationWorkflow } from './workflows/gmail-batch-classification-workflow';
+import { emailClassifierAgent } from './agents/email-classifier-agent';
 
 export const mastra = new Mastra({
-  workflows: { weatherWorkflow },
-  agents: { weatherAgent },
+  workflows: { weatherWorkflow, emailClassificationWorkflow, gmailBatchClassificationWorkflow },
+  agents: { weatherAgent, emailClassifierAgent },
   scorers: { toolCallAppropriatenessScorer, completenessScorer, translationScorer },
   storage: new LibSQLStore({
     id: "mastra-storage",
