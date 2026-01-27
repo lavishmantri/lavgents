@@ -1,0 +1,73 @@
+# Nango Self-Hosted Setup
+# Documentation: https://docs.nango.dev/host/self-host/local
+#
+# This provides:
+# - OAuth management for 500+ APIs
+# - Token storage (encrypted)
+# - Automatic token refresh
+# - Management dashboard at http://localhost:3003
+#
+# Note: Free self-hosted includes OAuth/auth only.
+# Data syncing, webhooks from Nango are cloud-only features.
+
+services:
+  nango-db:
+    image: postgres:15-alpine
+    container_name: nango-db
+    environment:
+      POSTGRES_DB: nango
+      POSTGRES_USER: nango
+      POSTGRES_PASSWORD: ${NANGO_DB_PASSWORD:-nango}
+    volumes:
+      - nango-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nango"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nango-network
+
+  nango-server:
+    image: nangohq/nango-server:latest
+    platform: linux/amd64  # Required for Apple Silicon (ARM64) compatibility
+    container_name: nango-server
+    depends_on:
+      nango-db:
+        condition: service_healthy
+    ports:
+      - "3003:3003"
+    environment:
+      # Database
+      NANGO_DATABASE_URL: postgres://nango:${NANGO_DB_PASSWORD:-nango}@nango-db:5432/nango
+
+      # Server configuration
+      NANGO_SERVER_URL: ${NANGO_SERVER_URL:-http://localhost:3003}
+      NANGO_PORT: 3003
+
+      # Security - CHANGE THESE IN PRODUCTION
+      NANGO_SECRET_KEY: ${NANGO_SECRET_KEY:-nango-secret-key-change-in-production}
+      NANGO_ENCRYPTION_KEY: ${NANGO_ENCRYPTION_KEY:-}
+
+      # Callback URL for OAuth redirects
+      NANGO_CALLBACK_URL: ${NANGO_CALLBACK_URL:-http://localhost:3003/oauth/callback}
+
+      # Disable telemetry if desired
+      NANGO_TELEMETRY: ${NANGO_TELEMETRY:-false}
+
+      # Log level
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nango-network
+
+volumes:
+  nango-db-data:
+
+networks:
+  nango-network:
+    driver: bridge

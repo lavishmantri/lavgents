@@ -10,8 +10,7 @@ import {
   type ClassificationOutput,
 } from '../schemas/email-schemas';
 import { defaultLabelConfig } from '../config/email-labels';
-import { normalizeGmailMessages } from '../utils/gmail-normalizer';
-import { executeComposioTool } from '../config/composio-config';
+import { fetchEmails, type GmailMessage } from '../integrations/google';
 
 // Helper: Convert time frame preset to Gmail query date
 function timeFrameToDate(timeFrame: TimeFrame): string {
@@ -91,10 +90,10 @@ const buildGmailQuery = createStep({
   },
 });
 
-// Step 2: Fetch emails via Composio Gmail
+// Step 2: Fetch emails via Google Gmail API (Nango OAuth)
 const fetchGmailEmails = createStep({
   id: 'fetch-gmail-emails',
-  description: 'Fetches emails from Gmail via Composio integration',
+  description: 'Fetches emails from Gmail via Google API with Nango OAuth',
   inputSchema: z.object({
     query: z.string(),
     maxResults: z.number(),
@@ -115,23 +114,23 @@ const fetchGmailEmails = createStep({
 
     console.log('[Gmail Fetch] Starting with:', { query, maxResults, userId });
 
-    // Call Composio Gmail fetch
-    const result = await executeComposioTool(
-      'GMAIL_FETCH_EMAILS',
-      {
-        query,
-        max_results: maxResults,
-        include_body: true,
-      },
-      userId
-    );
+    // Fetch emails using Google integration (Nango handles OAuth token)
+    const gmailMessages = await fetchEmails(userId, query, maxResults);
 
-    // DEBUG: Log raw response to understand the format
-    console.log('[Gmail Fetch] Raw Composio response:', JSON.stringify(result, null, 2));
+    // Convert GmailMessage to NormalizedEmail format
+    const emails: NormalizedEmail[] = gmailMessages.map((msg: GmailMessage) => ({
+      id: msg.id,
+      threadId: msg.threadId,
+      from: msg.from,
+      to: msg.to,
+      subject: msg.subject,
+      body: msg.body,
+      date: msg.date,
+      labels: msg.labels,
+      hasAttachments: msg.hasAttachments,
+    }));
 
-    // Normalize the response
-    const emails = normalizeGmailMessages(result);
-    console.log('[Gmail Fetch] Normalized emails count:', emails.length);
+    console.log('[Gmail Fetch] Fetched emails count:', emails.length);
 
     return {
       emails,

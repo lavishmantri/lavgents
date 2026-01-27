@@ -12,7 +12,7 @@ export const customDateRangeSchema = z.object({
 
 // Gmail fetch input schema
 export const gmailFetchInputSchema = z.object({
-  // Required: Composio user ID with active Gmail connection
+  // Required: Nango connection ID with active Gmail OAuth
   userId: z.string(),
 
   // Time filtering (priority: since > timeFrame > customDateRange)
