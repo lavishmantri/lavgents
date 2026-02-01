@@ -1,27 +1,81 @@
-# lavgents
+# Lavgents
 
-Welcome to your new [Mastra](https://mastra.ai/) project! We're excited to see what you'll build.
+AI agents for email classification and automation, built on [Mastra](https://mastra.ai/).
 
-## Getting Started
+## Features
 
-Start the development server:
+- **Email Classification** - LLM-powered classification with customizable labels (action-required, urgent, meeting, fyi, etc.)
+- **Gmail Integration** - Batch fetch and classify emails via OAuth
+- **Nango OAuth** - Self-hosted OAuth management for Google, GitHub, Slack, Notion, and more
+- **Mastra Workflows** - Step-based pipelines for email processing
+- **Webhook Handlers** - Ready for integration with external services
 
-```shell
-npm run dev
+## Quick Start
+
+1. **Clone and install**
+   ```bash
+   git clone <repo-url>
+   cd lavgents
+   npm install
+   ```
+
+2. **Configure environment**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your API keys
+   ```
+
+3. **Start Nango (OAuth server)**
+   ```bash
+   docker-compose up -d
+   ```
+
+4. **Configure OAuth providers** - Open http://localhost:3003 and add your OAuth credentials. See [Nango Setup Guide](docs/NANGO_SETUP.md).
+
+5. **Start development server**
+   ```bash
+   npm run dev
+   ```
+
+6. **Open Mastra Studio** - http://localhost:4111
+
+## Project Structure
+
+```
+src/mastra/
+├── agents/           # AI agents (email-classifier, weather)
+├── config/           # Label configurations
+├── integrations/     # Nango, Google, GitHub, Slack, Notion, Fireflies
+├── schemas/          # Zod schemas for emails and workflows
+├── workflows/        # Mastra workflows
+└── index.ts          # Mastra instance configuration
 ```
 
-Open [http://localhost:4111](http://localhost:4111) in your browser to access [Mastra Studio](https://mastra.ai/docs/getting-started/studio). It provides an interactive UI for building and testing your agents, along with a REST API that exposes your Mastra application as a local service. This lets you start building without worrying about integration right away.
+## Available Commands
 
-You can start editing files inside the `src/mastra` directory. The development server will automatically reload whenever you make changes.
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start development server with Mastra Studio |
+| `npm run build` | Build for production |
+| `npm run start` | Start production server |
 
-## Learn more
+## Documentation
 
-To learn more about Mastra, visit our [documentation](https://mastra.ai/docs/). Your bootstrapped project includes example code for [agents](https://mastra.ai/docs/agents/overview), [tools](https://mastra.ai/docs/agents/using-tools), [workflows](https://mastra.ai/docs/workflows/overview), [scorers](https://mastra.ai/docs/evals/overview), and [observability](https://mastra.ai/docs/observability/overview).
+- [Nango OAuth Setup](docs/NANGO_SETUP.md) - Configure self-hosted OAuth
+- [Workflows Guide](docs/WORKFLOWS.md) - Email classification workflows
 
-If you're new to AI agents, check out our [course](https://mastra.ai/course) and [YouTube videos](https://youtube.com/@mastra-ai). You can also join our [Discord](https://discord.gg/BTYqqHKUrf) community to get help and share your projects.
+## Requirements
 
-## Deploy on Mastra Cloud
+- Node.js >= 22.13.0
+- Docker (for Nango)
+- OpenAI API key (for LLM classification)
 
-[Mastra Cloud](https://cloud.mastra.ai/) gives you a serverless agent environment with atomic deployments. Access your agents from anywhere and monitor performance. Make sure they don't go off the rails with evals and tracing.
+## Links
 
-Check out the [deployment guide](https://mastra.ai/docs/deployment/overview) for more details.
+- [Mastra Documentation](https://mastra.ai/docs/)
+- [Mastra Discord](https://discord.gg/BTYqqHKUrf)
+- [Nango Documentation](https://docs.nango.dev/)
+
+## License
+
+ISC
