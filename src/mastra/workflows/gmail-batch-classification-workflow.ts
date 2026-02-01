@@ -40,14 +40,14 @@ const buildGmailQuery = createStep({
   outputSchema: z.object({
     query: z.string(),
     maxResults: z.number(),
-    userId: z.string(),
+    connectionId: z.string(),
     labelConfig: labelConfigSchema,
   }),
   execute: async ({ inputData }) => {
     if (!inputData) throw new Error('Input data required');
 
     const {
-      userId,
+      connectionId,
       since,
       timeFrame,
       customDateRange,
@@ -86,7 +86,7 @@ const buildGmailQuery = createStep({
     // Default to inbox if no query parts
     const query = queryParts.length > 0 ? queryParts.join(' ') : 'in:inbox';
 
-    return { query, maxResults, userId, labelConfig };
+    return { query, maxResults, connectionId, labelConfig };
   },
 });
 
@@ -97,7 +97,7 @@ const fetchGmailEmails = createStep({
   inputSchema: z.object({
     query: z.string(),
     maxResults: z.number(),
-    userId: z.string(),
+    connectionId: z.string(),
     labelConfig: labelConfigSchema,
   }),
   outputSchema: z.object({
@@ -110,12 +110,12 @@ const fetchGmailEmails = createStep({
   execute: async ({ inputData }) => {
     if (!inputData) throw new Error('Input data required');
 
-    const { query, maxResults, userId, labelConfig } = inputData;
+    const { query, maxResults, connectionId, labelConfig } = inputData;
 
-    console.log('[Gmail Fetch] Starting with:', { query, maxResults, userId });
+    console.log('[Gmail Fetch] Starting with:', { query, maxResults, connectionId });
 
     // Fetch emails using Google integration (Nango handles OAuth token)
-    const gmailMessages = await fetchEmails(userId, query, maxResults);
+    const gmailMessages = await fetchEmails(connectionId, query, maxResults);
 
     // Convert GmailMessage to NormalizedEmail format
     const emails: NormalizedEmail[] = gmailMessages.map((msg: GmailMessage) => ({

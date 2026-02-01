@@ -64,7 +64,7 @@ Fetches emails from Gmail via Nango OAuth and classifies them in batch.
 **Input:**
 ```typescript
 {
-  userId: string;              // Nango connection ID
+  connectionId: string;        // Nango connection ID
 
   // Time filtering (priority order: since > timeFrame > customDateRange)
   since?: string;              // ISO timestamp (for cron jobs)
@@ -185,7 +185,7 @@ const result = await mastra.runWorkflow('email-classification-workflow', {
 
 // Batch Gmail classification
 const batchResult = await mastra.runWorkflow('gmail-batch-classification-workflow', {
-  userId: 'user-123',  // Nango connection ID
+  connectionId: 'user-connection-id',  // Nango connection ID
   timeFrame: 'last24h',
   maxResults: 100,
 });

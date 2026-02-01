@@ -12,8 +12,8 @@ export const customDateRangeSchema = z.object({
 
 // Gmail fetch input schema
 export const gmailFetchInputSchema = z.object({
-  // Required: Nango connection ID with active Gmail OAuth
-  userId: z.string(),
+  // Required: Nango connection ID for Gmail OAuth
+  connectionId: z.string(),
 
   // Time filtering (priority: since > timeFrame > customDateRange)
   since: z.string().optional(),        // ISO timestamp - for cron (e.g., last run time)
