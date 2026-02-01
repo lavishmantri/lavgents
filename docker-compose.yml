@@ -28,12 +28,59 @@ services:
     networks:
       - nango-network
 
+  nango-persist:
+    image: nangohq/nango-persist:latest
+    platform: linux/amd64
+    container_name: nango-persist
+    depends_on:
+      nango-db:
+        condition: service_healthy
+    environment:
+      # Database
+      NANGO_DATABASE_URL: postgres://nango:${NANGO_DB_PASSWORD:-nango}@nango-db:5432/nango
+
+      # Security
+      NANGO_ENCRYPTION_KEY: ${NANGO_ENCRYPTION_KEY:-}
+
+      # Log level
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=:5051"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nango-network
+
+  nango-jobs:
+    image: nangohq/nango-jobs:latest
+    platform: linux/amd64
+    container_name: nango-jobs
+    depends_on:
+      nango-db:
+        condition: service_healthy
+      nango-persist:
+        condition: service_healthy
+    environment:
+      # Database
+      NANGO_DATABASE_URL: postgres://nango:${NANGO_DB_PASSWORD:-nango}@nango-db:5432/nango
+
+      # Security
+      NANGO_ENCRYPTION_KEY: ${NANGO_ENCRYPTION_KEY:-}
+
+      # Log level
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    networks:
+      - nango-network
+
   nango-server:
     image: nangohq/nango-server:latest
     platform: linux/amd64  # Required for Apple Silicon (ARM64) compatibility
     container_name: nango-server
     depends_on:
       nango-db:
+        condition: service_healthy
+      nango-persist:
         condition: service_healthy
     ports:
       - "3003:3003"
@@ -51,6 +98,9 @@ services:
 
       # Callback URL for OAuth redirects
       NANGO_CALLBACK_URL: ${NANGO_CALLBACK_URL:-http://localhost:3003/oauth/callback}
+
+      # gRPC connection to persist service
+      NANGO_PERSIST_SERVICE_URL: ${NANGO_PERSIST_SERVICE_URL:-nango-persist:5051}
 
       # Disable telemetry if desired
       NANGO_TELEMETRY: ${NANGO_TELEMETRY:-false}
