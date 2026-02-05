@@ -1,0 +1,76 @@
+{
+  "version": "1.0.0",
+  "lockfileVersion": 1,
+  "packages": {
+    "@nango/integration-patterns-skill#claude": {
+      "version": "1.0.1",
+      "resolved": "https://registry.prpm.dev/api/v1/packages/%40nango%2Fintegration-patterns-skill/1.0.1.tar.gz",
+      "integrity": "sha256-1fbfe31cdb34ef71415b32292f29257b9c56a722db748bde159450ba2063c46a",
+      "format": "claude",
+      "subtype": "skill",
+      "sourceFormat": "claude",
+      "sourceSubtype": "skill",
+      "installedPath": ".claude/skills/integration-patterns-skill/SKILL.md",
+      "fromCollection": {
+        "name_slug": "nango-function-builder",
+        "version": "1.0.2"
+      }
+    },
+    "@nango/sync-builder-skill#claude": {
+      "version": "1.2.1",
+      "resolved": "https://registry.prpm.dev/api/v1/packages/%40nango%2Fsync-builder-skill/1.2.1.tar.gz",
+      "integrity": "sha256-61abac872150d8c25f58cf259e6f4d6ec96370357d0f8daebd3c8944c8a33a5b",
+      "format": "claude",
+      "subtype": "skill",
+      "sourceFormat": "claude",
+      "sourceSubtype": "skill",
+      "installedPath": ".claude/skills/sync-builder-skill/SKILL.md",
+      "fromCollection": {
+        "name_slug": "nango-function-builder",
+        "version": "1.0.2"
+      }
+    },
+    "@nango/action-builder-skill#claude": {
+      "version": "1.2.2",
+      "resolved": "https://registry.prpm.dev/api/v1/packages/%40nango%2Faction-builder-skill/1.2.2.tar.gz",
+      "integrity": "sha256-ea430fedd56848938924a4770b89c39001df46ca983b4fcee8144d25d95ce57d",
+      "format": "claude",
+      "subtype": "skill",
+      "sourceFormat": "claude",
+      "sourceSubtype": "skill",
+      "installedPath": ".claude/skills/action-builder-skill/SKILL.md",
+      "fromCollection": {
+        "name_slug": "nango-function-builder",
+        "version": "1.0.2"
+      }
+    },
+    "@nango/build-function#claude": {
+      "version": "2.0.0",
+      "resolved": "https://registry.prpm.dev/api/v1/packages/%40nango%2Fbuild-function/2.0.0.tar.gz",
+      "integrity": "sha256-30543192786fd7de9d76d9029b396fd59bbbc6e297a9ad6326aeb33ae283688a",
+      "format": "claude",
+      "subtype": "slash-command",
+      "sourceFormat": "claude",
+      "sourceSubtype": "slash-command",
+      "installedPath": ".claude/commands/build-function.md",
+      "fromCollection": {
+        "name_slug": "nango-function-builder",
+        "version": "1.0.2"
+      }
+    }
+  },
+  "generated": "2026-02-01T15:46:40.183Z",
+  "collections": {
+    "nango-function-builder": {
+      "name_slug": "nango-function-builder",
+      "version": "1.0.2",
+      "installedAt": "2026-02-01T15:46:40.183Z",
+      "packages": [
+        "@nango/integration-patterns-skill",
+        "@nango/sync-builder-skill",
+        "@nango/action-builder-skill",
+        "@nango/build-function"
+      ]
+    }
+  }
+}

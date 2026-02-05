@@ -26,8 +26,13 @@ Nango will be available at http://localhost:3003
 ## Accessing the Dashboard
 
 1. Open http://localhost:3003 in your browser
-2. The dashboard shows configured integrations and active connections
-3. Use Environment Settings to find your secret key
+2. Login with:
+   - Username: `admin`
+   - Password: `admin`
+3. The dashboard shows configured integrations and active connections
+4. Use Environment Settings to find your secret key
+
+> **Note**: These credentials are for local development only. For production, configure `NANGO_ADMIN_KEY` and enable proper authentication.
 
 ## Configuring OAuth Providers
 

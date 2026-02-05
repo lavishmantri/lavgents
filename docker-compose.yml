@@ -1,18 +1,9 @@
 # Nango Self-Hosted Setup
-# Documentation: https://docs.nango.dev/host/self-host/local
-#
-# This provides:
-# - OAuth management for 500+ APIs
-# - Token storage (encrypted)
-# - Automatic token refresh
-# - Management dashboard at http://localhost:3003
-#
-# Note: Free self-hosted includes OAuth/auth only.
-# Data syncing, webhooks from Nango are cloud-only features.
+# Dashboard: http://localhost:3003
 
 services:
   nango-db:
-    image: postgres:15-alpine
+    image: postgres:17-alpine
     container_name: nango-db
     environment:
       POSTGRES_DB: nango
@@ -28,90 +19,47 @@ services:
     networks:
       - nango-network
 
-  nango-persist:
-    image: nangohq/nango-persist:latest
-    platform: linux/amd64
-    container_name: nango-persist
-    depends_on:
-      nango-db:
-        condition: service_healthy
-    environment:
-      # Database
-      NANGO_DATABASE_URL: postgres://nango:${NANGO_DB_PASSWORD:-nango}@nango-db:5432/nango
-
-      # Security
-      NANGO_ENCRYPTION_KEY: ${NANGO_ENCRYPTION_KEY:-}
-
-      # Log level
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-    healthcheck:
-      test: ["CMD", "grpc_health_probe", "-addr=:5051"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - nango-network
-
-  nango-jobs:
-    image: nangohq/nango-jobs:latest
-    platform: linux/amd64
-    container_name: nango-jobs
-    depends_on:
-      nango-db:
-        condition: service_healthy
-      nango-persist:
-        condition: service_healthy
-    environment:
-      # Database
-      NANGO_DATABASE_URL: postgres://nango:${NANGO_DB_PASSWORD:-nango}@nango-db:5432/nango
-
-      # Security
-      NANGO_ENCRYPTION_KEY: ${NANGO_ENCRYPTION_KEY:-}
-
-      # Log level
-      LOG_LEVEL: ${LOG_LEVEL:-info}
+  nango-redis:
+    image: redis:7-alpine
+    container_name: nango-redis
     networks:
       - nango-network
 
   nango-server:
-    image: nangohq/nango-server:latest
-    platform: linux/amd64  # Required for Apple Silicon (ARM64) compatibility
+    image: nangohq/nango-server:hosted
+    platform: linux/amd64
     container_name: nango-server
     depends_on:
       nango-db:
         condition: service_healthy
-      nango-persist:
-        condition: service_healthy
+      nango-redis:
+        condition: service_started
     ports:
-      - "3003:3003"
+      - "3003:8080"
+      - "3009:3009"
     environment:
-      # Database
+      NODE_ENV: development
       NANGO_DATABASE_URL: postgres://nango:${NANGO_DB_PASSWORD:-nango}@nango-db:5432/nango
-
-      # Server configuration
+      NANGO_REDIS_URL: redis://nango-redis:6379
       NANGO_SERVER_URL: ${NANGO_SERVER_URL:-http://localhost:3003}
-      NANGO_PORT: 3003
-
-      # Security - CHANGE THESE IN PRODUCTION
-      NANGO_SECRET_KEY: ${NANGO_SECRET_KEY:-nango-secret-key-change-in-production}
-      NANGO_ENCRYPTION_KEY: ${NANGO_ENCRYPTION_KEY:-}
-
-      # Callback URL for OAuth redirects
+      NANGO_SECRET_KEY: ${NANGO_SECRET_KEY:-b4875cd4-0f60-4ba6-aff1-6362bdb021b8}
+      NANGO_PUBLIC_KEY: ${NANGO_PUBLIC_KEY:-19b92ee7-9bf9-4e5b-974d-d02405269d75}
+      NANGO_ENCRYPTION_KEY: ${NANGO_ENCRYPTION_KEY:-E3r2AOp5uirYMTRJlw3NTe0HCE1WYnyBpjBjQc7tZ1Y=}
       NANGO_CALLBACK_URL: ${NANGO_CALLBACK_URL:-http://localhost:3003/oauth/callback}
-
-      # gRPC connection to persist service
-      NANGO_PERSIST_SERVICE_URL: ${NANGO_PERSIST_SERVICE_URL:-nango-persist:5051}
-
-      # Disable telemetry if desired
-      NANGO_TELEMETRY: ${NANGO_TELEMETRY:-false}
-
-      # Log level
-      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NANGO_TELEMETRY: false
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      FLAG_AUTH_ENABLED: "false"
+      FLAG_SERVE_CONNECT_UI: "true"
+      NANGO_PUBLIC_CONNECT_URL: ${NANGO_PUBLIC_CONNECT_URL:-http://localhost:3009}
+      NANGO_CONNECT_SESSION_TOKEN_SECRET: "connect-session-secret-for-local-dev"
+      NANGO_DASHBOARD_USERNAME: "admin"
+      NANGO_DASHBOARD_PASSWORD: "admin"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: always
     networks:
       - nango-network
 
