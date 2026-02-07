@@ -47,6 +47,7 @@ export const labelConfigSchema = z.object({
 
 // Batch classification result schema
 export const batchClassificationResultSchema = z.object({
+  connectionId: z.string(),
   totalFetched: z.number(),
   totalClassified: z.number(),
   totalFailed: z.number(),
@@ -64,8 +65,36 @@ export const batchClassificationResultSchema = z.object({
   queryUsed: z.string(),
 });
 
+// Label application result (per email)
+export const labelApplicationResultSchema = z.object({
+  emailId: z.string(),
+  labelName: z.string(),
+  labelId: z.string(),
+  success: z.boolean(),
+  error: z.string().optional(),
+});
+
+// Batch label application result schema (final workflow output)
+export const batchLabelApplicationResultSchema = z.object({
+  totalEmails: z.number(),
+  totalLabeled: z.number(),
+  totalFailed: z.number(),
+  labelsCreated: z.number(),
+  results: z.array(labelApplicationResultSchema),
+  classificationSummary: z.object({
+    byPrimaryLabel: z.record(z.string(), z.number()),
+    byPriority: z.object({
+      high: z.number(),
+      medium: z.number(),
+      low: z.number(),
+    }),
+  }),
+});
+
 // Type exports
 export type NormalizedEmail = z.infer<typeof normalizedEmailSchema>;
 export type ClassificationOutput = z.infer<typeof classificationOutputSchema>;
 export type LabelConfig = z.infer<typeof labelConfigSchema>;
 export type BatchClassificationResult = z.infer<typeof batchClassificationResultSchema>;
+export type LabelApplicationResult = z.infer<typeof labelApplicationResultSchema>;
+export type BatchLabelApplicationResult = z.infer<typeof batchLabelApplicationResultSchema>;

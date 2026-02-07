@@ -6,11 +6,14 @@ import {
   classificationOutputSchema,
   labelConfigSchema,
   batchClassificationResultSchema,
+  batchLabelApplicationResultSchema,
+  labelApplicationResultSchema,
   type NormalizedEmail,
   type ClassificationOutput,
+  type LabelApplicationResult,
 } from '../schemas/email-schemas';
 import { defaultLabelConfig } from '../config/email-labels';
-import { fetchEmails, type GmailMessage } from '../integrations/google';
+import { fetchEmails, addLabels, getLabels, createLabel, type GmailMessage } from '../integrations/google';
 
 // Helper: Convert time frame preset to Gmail query date
 function timeFrameToDate(timeFrame: TimeFrame): string {
@@ -105,6 +108,7 @@ const fetchGmailEmails = createStep({
     totalFetched: z.number(),
     queryUsed: z.string(),
     fetchedAt: z.string(),
+    connectionId: z.string(),
     labelConfig: labelConfigSchema,
   }),
   execute: async ({ inputData }) => {
@@ -114,8 +118,16 @@ const fetchGmailEmails = createStep({
 
     console.log('[Gmail Fetch] Starting with:', { query, maxResults, connectionId });
 
-    // Fetch emails using Google integration (Nango handles OAuth token)
-    const gmailMessages = await fetchEmails(connectionId, query, maxResults);
+    let gmailMessages: GmailMessage[];
+    try {
+      // Fetch emails using Google integration (Nango handles OAuth token)
+      gmailMessages = await fetchEmails(connectionId, query, maxResults);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `fetch-gmail-emails failed for connectionId "${connectionId}" with query "${query}" and maxResults ${maxResults}: ${message}`
+      );
+    }
 
     // Convert GmailMessage to NormalizedEmail format
     const emails: NormalizedEmail[] = gmailMessages.map((msg: GmailMessage) => ({
@@ -137,6 +149,7 @@ const fetchGmailEmails = createStep({
       totalFetched: emails.length,
       queryUsed: query,
       fetchedAt: new Date().toISOString(),
+      connectionId,
       labelConfig,
     };
   },
@@ -208,13 +221,14 @@ const classifyEmails = createStep({
     totalFetched: z.number(),
     queryUsed: z.string(),
     fetchedAt: z.string(),
+    connectionId: z.string(),
     labelConfig: labelConfigSchema,
   }),
   outputSchema: batchClassificationResultSchema,
   execute: async ({ inputData, mastra }) => {
     if (!inputData) throw new Error('Input data required');
 
-    const { emails, totalFetched, queryUsed, fetchedAt, labelConfig } = inputData;
+    const { emails, totalFetched, queryUsed, fetchedAt, connectionId, labelConfig } = inputData;
     const agent = mastra?.getAgent('emailClassifierAgent');
 
     if (!agent) {
@@ -256,6 +270,7 @@ const classifyEmails = createStep({
     }
 
     return {
+      connectionId,
       totalFetched,
       totalClassified: classifications.length,
       totalFailed: failedEmailIds.length,
@@ -271,15 +286,110 @@ const classifyEmails = createStep({
   },
 });
 
+// Step 4: Apply Gmail labels based on classifications
+const applyGmailLabels = createStep({
+  id: 'apply-gmail-labels',
+  description: 'Applies primaryLabel from each classification as a Gmail label',
+  inputSchema: batchClassificationResultSchema,
+  outputSchema: batchLabelApplicationResultSchema,
+  execute: async ({ inputData }) => {
+    if (!inputData) throw new Error('Input data required');
+
+    const { connectionId, classifications, summary } = inputData;
+
+    console.log('[Gmail Labels] Applying labels for', classifications.length, 'emails');
+
+    // Pre-fetch all existing labels into a cache: normalizedName -> id
+    const existingLabels = await getLabels(connectionId);
+    const labelCache = new Map<string, string>();
+    for (const label of existingLabels) {
+      if (label.name && label.id) {
+        labelCache.set(label.name.toLowerCase(), label.id);
+      }
+    }
+
+    let labelsCreated = 0;
+
+    // Resolve a label name to an ID, creating it if necessary
+    async function resolveLabelId(labelName: string): Promise<string> {
+      const cached = labelCache.get(labelName.toLowerCase());
+      if (cached) return cached;
+
+      // Create the label
+      try {
+        const newLabel = await createLabel(connectionId, labelName);
+        if (newLabel.id) {
+          labelCache.set(labelName.toLowerCase(), newLabel.id);
+          labelsCreated++;
+          return newLabel.id;
+        }
+        throw new Error('Created label has no ID');
+      } catch (err) {
+        // Handle 409 conflict (label already exists, e.g. race condition)
+        const message = err instanceof Error ? err.message : String(err);
+        if (message.includes('409') || message.toLowerCase().includes('already exists')) {
+          // Re-fetch labels and retry lookup
+          const refreshed = await getLabels(connectionId);
+          for (const label of refreshed) {
+            if (label.name && label.id) {
+              labelCache.set(label.name.toLowerCase(), label.id);
+            }
+          }
+          const retryId = labelCache.get(labelName.toLowerCase());
+          if (retryId) return retryId;
+        }
+        throw err;
+      }
+    }
+
+    // Process in batches of 3 (matches existing concurrency pattern)
+    const concurrency = 3;
+    const results: LabelApplicationResult[] = [];
+
+    for (let i = 0; i < classifications.length; i += concurrency) {
+      const batch = classifications.slice(i, i + concurrency);
+      const batchResults = await Promise.all(
+        batch.map(async (classification): Promise<LabelApplicationResult> => {
+          const { emailId, primaryLabel } = classification;
+          try {
+            const labelId = await resolveLabelId(primaryLabel);
+            await addLabels(connectionId, emailId, [labelId]);
+            return { emailId, labelName: primaryLabel, labelId, success: true };
+          } catch (err) {
+            const error = err instanceof Error ? err.message : String(err);
+            return { emailId, labelName: primaryLabel, labelId: '', success: false, error };
+          }
+        }),
+      );
+      results.push(...batchResults);
+    }
+
+    const totalLabeled = results.filter(r => r.success).length;
+    const totalFailed = results.filter(r => !r.success).length;
+
+    console.log('[Gmail Labels] Done:', { totalLabeled, totalFailed, labelsCreated });
+
+    return {
+      totalEmails: classifications.length,
+      totalLabeled,
+      totalFailed,
+      labelsCreated,
+      results,
+      classificationSummary: summary,
+    };
+  },
+});
+
 // Create the workflow
 const gmailBatchClassificationWorkflow = createWorkflow({
   id: 'gmail-batch-classification-workflow',
   inputSchema: gmailFetchInputSchema,
-  outputSchema: batchClassificationResultSchema,
+  outputSchema: batchLabelApplicationResultSchema,
 })
   .then(buildGmailQuery)
   .then(fetchGmailEmails)
-  .then(classifyEmails);
+  .then(classifyEmails)
+  .then(applyGmailLabels);
 
 gmailBatchClassificationWorkflow.commit();
 

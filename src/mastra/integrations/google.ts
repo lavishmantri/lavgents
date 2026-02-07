@@ -1,5 +1,5 @@
-import { google, gmail_v1, calendar_v3, drive_v3 } from 'googleapis';
-import { getToken } from './nango';
+import { calendar_v3, drive_v3, gmail_v1, google } from "googleapis";
+import { getToken } from "./nango";
 
 /**
  * Create an authenticated OAuth2 client with Nango-managed token.
@@ -8,7 +8,7 @@ import { getToken } from './nango';
  * @returns Configured OAuth2 client
  */
 async function getAuthClient(connectionId: string) {
-  const token = await getToken('google', connectionId);
+  const token = await getToken("google-mail", connectionId);
   const auth = new google.auth.OAuth2();
   auth.setCredentials({ access_token: token });
   return auth;
@@ -22,7 +22,7 @@ async function getAuthClient(connectionId: string) {
  */
 export async function getGmail(connectionId: string): Promise<gmail_v1.Gmail> {
   const auth = await getAuthClient(connectionId);
-  return google.gmail({ version: 'v1', auth });
+  return google.gmail({ version: "v1", auth });
 }
 
 /**
@@ -31,9 +31,11 @@ export async function getGmail(connectionId: string): Promise<gmail_v1.Gmail> {
  * @param connectionId - User's connection ID in Nango
  * @returns Calendar API client
  */
-export async function getCalendar(connectionId: string): Promise<calendar_v3.Calendar> {
+export async function getCalendar(
+  connectionId: string,
+): Promise<calendar_v3.Calendar> {
   const auth = await getAuthClient(connectionId);
-  return google.calendar({ version: 'v3', auth });
+  return google.calendar({ version: "v3", auth });
 }
 
 /**
@@ -44,7 +46,7 @@ export async function getCalendar(connectionId: string): Promise<calendar_v3.Cal
  */
 export async function getDrive(connectionId: string): Promise<drive_v3.Drive> {
   const auth = await getAuthClient(connectionId);
-  return google.drive({ version: 'v3', auth });
+  return google.drive({ version: "v3", auth });
 }
 
 // ============================================================================
@@ -74,30 +76,62 @@ export interface GmailMessage {
 export async function fetchEmails(
   connectionId: string,
   query: string,
-  maxResults: number = 50
+  maxResults: number = 50,
 ): Promise<GmailMessage[]> {
   const gmail = await getGmail(connectionId);
 
   // List message IDs matching query
   const listResponse = await gmail.users.messages.list({
-    userId: 'me',
+    userId: "me",
     q: query,
     maxResults,
   });
 
   const messageIds = listResponse.data.messages || [];
 
-  // Fetch full message details in parallel
-  const messages = await Promise.all(
+  // Fetch full message details in parallel; tolerate individual failures.
+  const messageDetails = await Promise.allSettled(
     messageIds.map(async (msg) => {
+      if (!msg.id) {
+        throw new Error("Message ID missing in Gmail list response");
+      }
+
       const detail = await gmail.users.messages.get({
-        userId: 'me',
-        id: msg.id!,
-        format: 'full',
+        userId: "me",
+        id: msg.id,
+        format: "full",
       });
       return parseGmailMessage(detail.data);
-    })
+    }),
   );
+
+  const messages: GmailMessage[] = [];
+  const fetchFailures: string[] = [];
+
+  for (const result of messageDetails) {
+    if (result.status === "fulfilled") {
+      messages.push(result.value);
+      continue;
+    }
+
+    const reason =
+      result.reason instanceof Error
+        ? result.reason.message
+        : String(result.reason);
+    fetchFailures.push(reason);
+  }
+
+  if (fetchFailures.length > 0) {
+    console.warn(
+      `[Google/Gmail] Failed to fetch ${fetchFailures.length}/${messageIds.length} message details`,
+    );
+  }
+
+  if (messageIds.length > 0 && messages.length === 0) {
+    throw new Error(
+      `Failed to fetch any Gmail message details. First failure: ${fetchFailures[0] || "Unknown error"}`,
+    );
+  }
 
   return messages;
 }
@@ -108,19 +142,20 @@ export async function fetchEmails(
 function parseGmailMessage(message: gmail_v1.Schema$Message): GmailMessage {
   const headers = message.payload?.headers || [];
   const getHeader = (name: string): string =>
-    headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value || '';
+    headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ||
+    "";
 
-  const fromHeader = getHeader('from');
-  const toHeader = getHeader('to');
+  const fromHeader = getHeader("from");
+  const toHeader = getHeader("to");
 
   return {
-    id: message.id || '',
-    threadId: message.threadId || '',
+    id: message.id || "",
+    threadId: message.threadId || "",
     from: parseEmailAddress(fromHeader),
-    to: toHeader.split(',').map((addr) => parseEmailAddress(addr.trim())),
-    subject: getHeader('subject'),
+    to: toHeader.split(",").map((addr) => parseEmailAddress(addr.trim())),
+    subject: getHeader("subject"),
     body: extractBody(message.payload),
-    date: getHeader('date'),
+    date: getHeader("date"),
     labels: message.labelIds || [],
     hasAttachments: hasAttachments(message.payload),
   };
@@ -133,35 +168,35 @@ function parseEmailAddress(raw: string): { name: string; email: string } {
   const match = raw.match(/^(?:"?([^"<]*)"?\s*)?<?([^>]+)>?$/);
   if (match) {
     return {
-      name: match[1]?.trim() || '',
+      name: match[1]?.trim() || "",
       email: match[2]?.trim() || raw,
     };
   }
-  return { name: '', email: raw };
+  return { name: "", email: raw };
 }
 
 /**
  * Extract plain text body from message payload.
  */
 function extractBody(payload?: gmail_v1.Schema$MessagePart): string {
-  if (!payload) return '';
+  if (!payload) return "";
 
   // Direct body
   if (payload.body?.data) {
-    return Buffer.from(payload.body.data, 'base64').toString('utf-8');
+    return Buffer.from(payload.body.data, "base64").toString("utf-8");
   }
 
   // Multipart - find text/plain or text/html
   if (payload.parts) {
     for (const part of payload.parts) {
-      if (part.mimeType === 'text/plain' && part.body?.data) {
-        return Buffer.from(part.body.data, 'base64').toString('utf-8');
+      if (part.mimeType === "text/plain" && part.body?.data) {
+        return Buffer.from(part.body.data, "base64").toString("utf-8");
       }
     }
     // Fallback to HTML if no plain text
     for (const part of payload.parts) {
-      if (part.mimeType === 'text/html' && part.body?.data) {
-        const html = Buffer.from(part.body.data, 'base64').toString('utf-8');
+      if (part.mimeType === "text/html" && part.body?.data) {
+        const html = Buffer.from(part.body.data, "base64").toString("utf-8");
         return stripHtml(html);
       }
     }
@@ -172,7 +207,7 @@ function extractBody(payload?: gmail_v1.Schema$MessagePart): string {
     }
   }
 
-  return '';
+  return "";
 }
 
 /**
@@ -180,10 +215,10 @@ function extractBody(payload?: gmail_v1.Schema$MessagePart): string {
  */
 function stripHtml(html: string): string {
   return html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -205,11 +240,11 @@ function hasAttachments(payload?: gmail_v1.Schema$MessagePart): boolean {
 export async function addLabels(
   connectionId: string,
   messageId: string,
-  labelIds: string[]
+  labelIds: string[],
 ): Promise<void> {
   const gmail = await getGmail(connectionId);
   await gmail.users.messages.modify({
-    userId: 'me',
+    userId: "me",
     id: messageId,
     requestBody: {
       addLabelIds: labelIds,
@@ -223,11 +258,11 @@ export async function addLabels(
 export async function removeLabels(
   connectionId: string,
   messageId: string,
-  labelIds: string[]
+  labelIds: string[],
 ): Promise<void> {
   const gmail = await getGmail(connectionId);
   await gmail.users.messages.modify({
-    userId: 'me',
+    userId: "me",
     id: messageId,
     requestBody: {
       removeLabelIds: labelIds,
@@ -238,8 +273,33 @@ export async function removeLabels(
 /**
  * Get all labels for the user's mailbox.
  */
-export async function getLabels(connectionId: string): Promise<gmail_v1.Schema$Label[]> {
+export async function getLabels(
+  connectionId: string,
+): Promise<gmail_v1.Schema$Label[]> {
   const gmail = await getGmail(connectionId);
-  const response = await gmail.users.labels.list({ userId: 'me' });
+  const response = await gmail.users.labels.list({ userId: "me" });
   return response.data.labels || [];
+}
+
+/**
+ * Create a new Gmail label.
+ *
+ * @param connectionId - User's connection ID
+ * @param labelName - Display name for the new label
+ * @returns The created label
+ */
+export async function createLabel(
+  connectionId: string,
+  labelName: string,
+): Promise<gmail_v1.Schema$Label> {
+  const gmail = await getGmail(connectionId);
+  const response = await gmail.users.labels.create({
+    userId: "me",
+    requestBody: {
+      name: labelName,
+      labelListVisibility: "labelShow",
+      messageListVisibility: "show",
+    },
+  });
+  return response.data;
 }
