@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Mastra Dev",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npx mastra dev --inspect"
+    },
+    {
+      "name": "Attach to Mastra",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "restart": true,
+      "skipFiles": ["<node_internals>/**"],
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/.mastra/output/**"
+      ]
+    }
+  ]
+}
