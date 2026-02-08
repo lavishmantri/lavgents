@@ -1,0 +1,123 @@
+/**
+ * Telegram Bot API integration using HTTP API.
+ * Uses bot token authentication (not OAuth).
+ *
+ * API Documentation: https://core.telegram.org/bots/api
+ */
+
+const TELEGRAM_API_BASE = 'https://api.telegram.org';
+
+/**
+ * Get the Telegram bot token from environment.
+ */
+function getBotToken(): string {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) {
+    throw new Error('TELEGRAM_BOT_TOKEN environment variable not set');
+  }
+  return token;
+}
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export interface TelegramFile {
+  file_id: string;
+  file_unique_id: string;
+  file_size?: number;
+  file_path?: string;
+}
+
+export interface TelegramMessage {
+  message_id: number;
+  chat: { id: number };
+}
+
+interface TelegramApiResponse<T> {
+  ok: boolean;
+  result?: T;
+  description?: string;
+  error_code?: number;
+}
+
+// ============================================================================
+// API Operations
+// ============================================================================
+
+/**
+ * Get file metadata from Telegram (returns file_path for download).
+ */
+export async function getFile(fileId: string): Promise<TelegramFile> {
+  const token = getBotToken();
+  const response = await fetch(`${TELEGRAM_API_BASE}/bot${token}/getFile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ file_id: fileId }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Telegram getFile error: ${response.status} ${response.statusText}`);
+  }
+
+  const data = (await response.json()) as TelegramApiResponse<TelegramFile>;
+
+  if (!data.ok || !data.result) {
+    throw new Error(`Telegram getFile failed: ${data.description || 'Unknown error'}`);
+  }
+
+  return data.result;
+}
+
+/**
+ * Download raw binary from Telegram file servers.
+ * @param filePath - The file_path returned from getFile()
+ */
+export async function downloadFile(filePath: string): Promise<Buffer> {
+  const token = getBotToken();
+  const response = await fetch(`${TELEGRAM_API_BASE}/file/bot${token}/${filePath}`);
+
+  if (!response.ok) {
+    throw new Error(`Telegram downloadFile error: ${response.status} ${response.statusText}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+/**
+ * Send a text message to a Telegram chat.
+ */
+export async function sendMessage(
+  chatId: number,
+  text: string,
+  opts?: { replyToMessageId?: number },
+): Promise<TelegramMessage> {
+  const token = getBotToken();
+
+  const body: Record<string, unknown> = {
+    chat_id: chatId,
+    text,
+  };
+  if (opts?.replyToMessageId) {
+    body.reply_parameters = { message_id: opts.replyToMessageId };
+  }
+
+  const response = await fetch(`${TELEGRAM_API_BASE}/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Telegram sendMessage error: ${response.status} ${response.statusText}`);
+  }
+
+  const data = (await response.json()) as TelegramApiResponse<TelegramMessage>;
+
+  if (!data.ok || !data.result) {
+    throw new Error(`Telegram sendMessage failed: ${data.description || 'Unknown error'}`);
+  }
+
+  return data.result;
+}

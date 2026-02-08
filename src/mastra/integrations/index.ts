@@ -9,6 +9,7 @@
  *
  * API key integrations:
  * - fireflies: Meeting transcripts
+ * - telegram: Bot API (messages, files)
  */
 
 // OAuth management via Nango
@@ -28,3 +29,6 @@ export * as notion from './notion';
 
 // Fireflies (API key only)
 export * as fireflies from './fireflies';
+
+// Telegram (API key only)
+export * as telegram from './telegram';

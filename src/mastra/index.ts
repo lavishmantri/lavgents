@@ -11,9 +11,12 @@ import { gmailBatchClassificationWorkflow } from './workflows/gmail-batch-classi
 import { emailClassifierAgent } from './agents/email-classifier-agent';
 import { voiceNoteAgent } from './agents/voice-note-agent';
 import { voiceNoteWorkflow } from './workflows/voice-note-workflow';
+import { telegramNoteWorkflow } from './workflows/telegram-note-workflow';
+import { registerApiRoute } from '@mastra/core/server';
+import { telegramWebhookHandler } from './webhooks/handlers';
 
 export const mastra = new Mastra({
-  workflows: { weatherWorkflow, emailClassificationWorkflow, gmailBatchClassificationWorkflow, voiceNoteWorkflow },
+  workflows: { weatherWorkflow, emailClassificationWorkflow, gmailBatchClassificationWorkflow, voiceNoteWorkflow, telegramNoteWorkflow },
   agents: { weatherAgent, emailClassifierAgent, voiceNoteAgent },
   scorers: { toolCallAppropriatenessScorer, completenessScorer, translationScorer },
   bundler: {
@@ -28,6 +31,14 @@ export const mastra = new Mastra({
     name: 'Mastra',
     level: 'info',
   }),
+  server: {
+    apiRoutes: [
+      registerApiRoute('/webhooks/telegram', {
+        method: 'POST',
+        handler: telegramWebhookHandler,
+      }),
+    ],
+  },
   observability: new Observability({
     configs: {
       default: {

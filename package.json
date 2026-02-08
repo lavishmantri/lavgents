@@ -5,9 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "mastra dev",
+    "dev": "MASTRA_STUDIO_PATH=./node_modules/mastra/dist/studio mastra dev",
     "build": "mastra build",
-    "start": "mastra start"
+    "start": "MASTRA_STUDIO_PATH=./node_modules/mastra/dist/studio mastra start"
   },
   "keywords": [],
   "author": "",

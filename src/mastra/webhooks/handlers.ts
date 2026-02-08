@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import type { Mastra } from '@mastra/core/mastra';
+import type { TelegramNoteInput } from '../schemas/telegram-schemas';
 
 /**
  * Webhook handlers for external service integrations.
@@ -259,6 +261,176 @@ export const slackWebhookHandler = async (c: {
     return c.json({ ok: true });
   } catch (err) {
     console.error('[Slack Webhook] Error processing event:', err);
+    return c.json({ error: 'Processing failed' }, 500);
+  }
+};
+
+// ============================================================================
+// Telegram Webhook
+// ============================================================================
+
+/**
+ * Verify Telegram webhook secret token (timing-safe comparison).
+ * @see https://core.telegram.org/bots/api#setwebhook
+ */
+export function verifyTelegramSecret(
+  headerToken: string,
+  expectedSecret: string,
+): boolean {
+  if (!headerToken || !expectedSecret) return false;
+
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(headerToken),
+      Buffer.from(expectedSecret),
+    );
+  } catch {
+    return false;
+  }
+}
+
+export interface TelegramWebhookEvent {
+  update_id: number;
+  message?: {
+    message_id: number;
+    from?: {
+      id: number;
+      is_bot: boolean;
+      first_name: string;
+      last_name?: string;
+      username?: string;
+    };
+    chat: {
+      id: number;
+      type: string;
+    };
+    date: number;
+    text?: string;
+    voice?: {
+      file_id: string;
+      file_unique_id: string;
+      duration: number;
+      mime_type?: string;
+      file_size?: number;
+    };
+    audio?: {
+      file_id: string;
+      file_unique_id: string;
+      duration: number;
+      mime_type?: string;
+      file_size?: number;
+      title?: string;
+      performer?: string;
+    };
+  };
+}
+
+/**
+ * Extract workflow input from a Telegram webhook event.
+ */
+function extractTelegramInput(event: TelegramWebhookEvent): TelegramNoteInput | null {
+  const msg = event.message;
+  if (!msg) return null;
+
+  const senderName = [msg.from?.first_name, msg.from?.last_name].filter(Boolean).join(' ') || 'Unknown';
+
+  if (msg.voice) {
+    return {
+      chatId: msg.chat.id,
+      messageId: msg.message_id,
+      senderName,
+      date: msg.date,
+      messageType: 'voice',
+      fileId: msg.voice.file_id,
+      mimeType: msg.voice.mime_type,
+      duration: msg.voice.duration,
+    };
+  }
+
+  if (msg.audio) {
+    return {
+      chatId: msg.chat.id,
+      messageId: msg.message_id,
+      senderName,
+      date: msg.date,
+      messageType: 'audio',
+      fileId: msg.audio.file_id,
+      mimeType: msg.audio.mime_type,
+      duration: msg.audio.duration,
+    };
+  }
+
+  if (msg.text) {
+    return {
+      chatId: msg.chat.id,
+      messageId: msg.message_id,
+      senderName,
+      date: msg.date,
+      messageType: 'text',
+      text: msg.text,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Process a verified Telegram webhook event by running the note workflow.
+ */
+export async function handleTelegramMessage(
+  event: TelegramWebhookEvent,
+  mastra: Mastra,
+): Promise<void> {
+  const input = extractTelegramInput(event);
+  if (!input) {
+    console.log('[Telegram Webhook] Ignoring unsupported message type');
+    return;
+  }
+
+  console.log(`[Telegram Webhook] Processing ${input.messageType} from ${input.senderName}`);
+
+  const workflow = mastra.getWorkflow('telegramNoteWorkflow');
+  const run = await workflow.createRun();
+  const result = await run.start({ inputData: input });
+
+  if (result.status === 'failed') {
+    console.error('[Telegram Webhook] Workflow failed:', result);
+  }
+}
+
+/**
+ * Telegram webhook route handler.
+ * Register with Mastra's registerApiRoute.
+ */
+export const telegramWebhookHandler = async (c: {
+  req: {
+    header: (name: string) => string | undefined;
+    text: () => Promise<string>;
+  };
+  json: (data: unknown, status?: number) => Response;
+  get: (key: string) => unknown;
+}) => {
+  const secretToken = c.req.header('x-telegram-bot-api-secret-token') || '';
+  const body = await c.req.text();
+
+  const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (!secret) {
+    console.error('[Telegram Webhook] TELEGRAM_WEBHOOK_SECRET not configured');
+    return c.json({ error: 'Webhook not configured' }, 500);
+  }
+
+  if (!verifyTelegramSecret(secretToken, secret)) {
+    console.warn('[Telegram Webhook] Invalid secret token');
+    return c.json({ error: 'Invalid secret token' }, 401);
+  }
+
+  try {
+    const event = JSON.parse(body) as TelegramWebhookEvent;
+    const mastra = c.get('mastra') as Mastra;
+    await handleTelegramMessage(event, mastra);
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error('[Telegram Webhook] Error processing event:', err);
     return c.json({ error: 'Processing failed' }, 500);
   }
 };

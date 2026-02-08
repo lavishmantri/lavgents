@@ -35,3 +35,17 @@ export async function writeMdFile(
   const content = `---\n${yamlBlock}\n---\n\n${body}\n`;
   await writeFile(filePath, content, { mkdir: true });
 }
+
+/**
+ * Write binary content to a file, optionally ensuring the parent directory exists.
+ */
+export async function writeBinaryFile(
+  filePath: string,
+  content: Buffer,
+  options: { mkdir?: boolean } = {},
+): Promise<void> {
+  if (options.mkdir) {
+    await mkdir(dirname(filePath), { recursive: true });
+  }
+  await fsWriteFile(filePath, content);
+}
