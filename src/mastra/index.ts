@@ -9,11 +9,16 @@ import { toolCallAppropriatenessScorer, completenessScorer, translationScorer } 
 import { emailClassificationWorkflow } from './workflows/email-classification-workflow';
 import { gmailBatchClassificationWorkflow } from './workflows/gmail-batch-classification-workflow';
 import { emailClassifierAgent } from './agents/email-classifier-agent';
+import { voiceNoteAgent } from './agents/voice-note-agent';
+import { voiceNoteWorkflow } from './workflows/voice-note-workflow';
 
 export const mastra = new Mastra({
-  workflows: { weatherWorkflow, emailClassificationWorkflow, gmailBatchClassificationWorkflow },
-  agents: { weatherAgent, emailClassifierAgent },
+  workflows: { weatherWorkflow, emailClassificationWorkflow, gmailBatchClassificationWorkflow, voiceNoteWorkflow },
+  agents: { weatherAgent, emailClassifierAgent, voiceNoteAgent },
   scorers: { toolCallAppropriatenessScorer, completenessScorer, translationScorer },
+  bundler: {
+    sourcemap: true,
+  },
   storage: new LibSQLStore({
     id: "mastra-storage",
     // stores observability, scores, ... into memory storage, if it needs to persist, change to file:../mastra.db

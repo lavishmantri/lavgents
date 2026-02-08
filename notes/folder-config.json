@@ -1,0 +1,39 @@
+{
+  "folders": [
+    {
+      "id": "grocery",
+      "name": "Grocery",
+      "keywords": ["grocery", "groceries", "shopping list", "buy food", "supermarket"],
+      "vaultPath": "grocery"
+    },
+    {
+      "id": "todo",
+      "name": "To-Do",
+      "keywords": ["todo", "to-do", "to do", "task", "remind me", "remember to"],
+      "vaultPath": "todo"
+    },
+    {
+      "id": "journal",
+      "name": "Journal",
+      "keywords": ["journal", "diary", "today I", "feeling", "thought about"],
+      "vaultPath": "journal"
+    },
+    {
+      "id": "idea",
+      "name": "Ideas",
+      "keywords": ["idea", "what if", "concept", "brainstorm"],
+      "vaultPath": "ideas"
+    },
+    {
+      "id": "meeting",
+      "name": "Meeting Notes",
+      "keywords": ["meeting", "call with", "discussed", "standup", "sync"],
+      "vaultPath": "meetings"
+    }
+  ],
+  "defaultFolder": {
+    "id": "inbox",
+    "name": "Inbox",
+    "vaultPath": "inbox"
+  }
+}
