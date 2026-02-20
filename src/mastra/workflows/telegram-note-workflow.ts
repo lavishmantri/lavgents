@@ -1,5 +1,5 @@
 import { createStep, createWorkflow } from '@mastra/core/workflows';
-import { resolve, join } from 'node:path';
+import { join } from 'node:path';
 import {
   telegramNoteInputSchema,
   saveContentOutputSchema,
@@ -7,11 +7,7 @@ import {
 } from '../schemas/telegram-schemas';
 import { writeMdFile, writeBinaryFile } from '../tools/write-utils';
 import { getFile, downloadFile, sendMessage } from '../integrations/telegram';
-import { homedir } from 'node:os';
-
-// Path to the notes vault root — defaults to sibling notes/ directory
-const rawNotesRoot = process.env.NOTES_ROOT || resolve(import.meta.dirname, '..', '..', '..', 'notes');
-const NOTES_ROOT = rawNotesRoot.startsWith('~') ? rawNotesRoot.replace('~', homedir()) : rawNotesRoot;
+import { NOTES_ROOT } from '../config/paths';
 
 /**
  * Map mime type to file extension for audio files.

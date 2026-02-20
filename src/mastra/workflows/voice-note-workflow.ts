@@ -1,7 +1,7 @@
 import { createStep, createWorkflow } from '@mastra/core/workflows';
 import { z } from 'zod';
 import { readFile } from 'node:fs/promises';
-import { join, resolve, basename } from 'node:path';
+import { join, basename } from 'node:path';
 import {
   voiceNoteInputSchema,
   resolveTranscriptionOutputSchema,
@@ -12,11 +12,7 @@ import {
 } from '../schemas/voice-note-schemas';
 import { writeMdFile } from '../tools/write-utils';
 import { isOfflineMode } from '../config/model';
-import { homedir } from 'node:os';
-
-// Path to the notes vault root — defaults to sibling notes/ directory
-const rawNotesRoot = process.env.NOTES_ROOT || resolve(import.meta.dirname, '..', '..', '..', 'notes');
-const NOTES_ROOT = rawNotesRoot.startsWith('~') ? rawNotesRoot.replace('~', homedir()) : rawNotesRoot;
+import { NOTES_ROOT } from '../config/paths';
 
 // Step 1: Check if transcription is already provided or exists as sidecar .txt
 const resolveTranscription = createStep({
