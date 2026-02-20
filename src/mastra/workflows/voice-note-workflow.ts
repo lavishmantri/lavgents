@@ -11,9 +11,12 @@ import {
   writeToInboxOutputSchema,
 } from '../schemas/voice-note-schemas';
 import { writeMdFile } from '../tools/write-utils';
+import { isOfflineMode } from '../config/model';
+import { homedir } from 'node:os';
 
 // Path to the notes vault root — defaults to sibling notes/ directory
-const NOTES_ROOT = process.env.NOTES_ROOT || resolve(import.meta.dirname, '..', '..', '..', 'notes');
+const rawNotesRoot = process.env.NOTES_ROOT || resolve(import.meta.dirname, '..', '..', '..', 'notes');
+const NOTES_ROOT = rawNotesRoot.startsWith('~') ? rawNotesRoot.replace('~', homedir()) : rawNotesRoot;
 
 // Step 1: Check if transcription is already provided or exists as sidecar .txt
 const resolveTranscription = createStep({
@@ -61,20 +64,31 @@ const transcribeAudio = createStep({
       return { audioFilePath, transcription };
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      throw new Error('OPENAI_API_KEY environment variable is required for transcription');
-    }
-
     const audioBuffer = await readFile(audioFilePath);
     const blob = new Blob([audioBuffer]);
     const formData = new FormData();
     formData.append('file', blob, basename(audioFilePath));
-    formData.append('model', 'whisper-1');
 
-    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    let transcriptionUrl: string;
+    const headers: Record<string, string> = {};
+
+    if (isOfflineMode) {
+      const whisperBase = process.env.WHISPER_BASE_URL || 'http://localhost:8080/v1';
+      transcriptionUrl = `${whisperBase}/audio/transcriptions`;
+      formData.append('model', 'Systran/faster-whisper-base.en');
+    } else {
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        throw new Error('OPENAI_API_KEY environment variable is required for transcription');
+      }
+      transcriptionUrl = 'https://api.openai.com/v1/audio/transcriptions';
+      headers['Authorization'] = `Bearer ${apiKey}`;
+      formData.append('model', 'whisper-1');
+    }
+
+    const response = await fetch(transcriptionUrl, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` },
+      headers,
       body: formData,
     });
 

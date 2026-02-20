@@ -7,9 +7,11 @@ import {
 } from '../schemas/telegram-schemas';
 import { writeMdFile, writeBinaryFile } from '../tools/write-utils';
 import { getFile, downloadFile, sendMessage } from '../integrations/telegram';
+import { homedir } from 'node:os';
 
 // Path to the notes vault root — defaults to sibling notes/ directory
-const NOTES_ROOT = process.env.NOTES_ROOT || resolve(import.meta.dirname, '..', '..', '..', 'notes');
+const rawNotesRoot = process.env.NOTES_ROOT || resolve(import.meta.dirname, '..', '..', '..', 'notes');
+const NOTES_ROOT = rawNotesRoot.startsWith('~') ? rawNotesRoot.replace('~', homedir()) : rawNotesRoot;
 
 /**
  * Map mime type to file extension for audio files.

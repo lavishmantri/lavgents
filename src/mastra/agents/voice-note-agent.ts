@@ -1,9 +1,10 @@
 import { Agent } from '@mastra/core/agent';
+import { getModelConfig } from '../config/model';
 
 export const voiceNoteAgent = new Agent({
   id: 'voice-note-agent',
   name: 'Voice Note Parser',
-  model: 'openai/gpt-4o',
+  model: getModelConfig(),
   instructions: `You are a voice-note parser. Given a transcription of a spoken voice note, extract structured data.
 
 Determine:
