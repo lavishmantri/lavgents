@@ -1,6 +1,7 @@
-import { writeFile as fsWriteFile, mkdir } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { writeFile as fsWriteFile, mkdir, rename } from 'node:fs/promises';
+import { dirname, join, basename } from 'node:path';
 import { stringify as yamlStringify } from 'yaml';
+import { readMdFile } from './read-utils';
 
 /**
  * Write raw content to a file path.
@@ -48,4 +49,39 @@ export async function writeBinaryFile(
     await mkdir(dirname(filePath), { recursive: true });
   }
   await fsWriteFile(filePath, content);
+}
+
+/**
+ * Merge fields into an existing markdown file's frontmatter.
+ */
+export async function updateMdFrontmatter(
+  filePath: string,
+  updates: Record<string, unknown>,
+): Promise<void> {
+  const { frontmatter, body } = await readMdFile(filePath);
+  const merged = { ...frontmatter, ...updates };
+  await writeMdFile(filePath, merged, body);
+}
+
+/**
+ * Move a markdown note (and its companion audio file if referenced) to a new directory.
+ */
+export async function moveMdFile(src: string, destDir: string): Promise<string> {
+  await mkdir(destDir, { recursive: true });
+  const dest = join(destDir, basename(src));
+  await rename(src, dest);
+
+  // Move companion audio file if referenced in frontmatter
+  const { frontmatter } = await readMdFile(dest);
+  if (typeof frontmatter.audioFile === 'string') {
+    const audioSrc = join(dirname(src), frontmatter.audioFile);
+    const audioDest = join(destDir, frontmatter.audioFile);
+    try {
+      await rename(audioSrc, audioDest);
+    } catch {
+      // Audio file may not exist or already moved — non-fatal
+    }
+  }
+
+  return dest;
 }

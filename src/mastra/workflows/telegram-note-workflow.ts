@@ -7,6 +7,7 @@ import {
 } from '../schemas/telegram-schemas';
 import { writeMdFile, writeBinaryFile } from '../tools/write-utils';
 import { getFile, downloadFile, sendMessage } from '../integrations/telegram';
+import { transcribeAudioBuffer } from '../tools/transcribe';
 import { NOTES_ROOT } from '../config/paths';
 
 /**
@@ -42,13 +43,15 @@ const saveContent = createStep({
       source: 'telegram',
       sender: senderName,
       messageType,
+      chatId,
+      status: 'unprocessed',
     };
 
     if (messageType === 'text') {
       const fileName = `${dateSlug}-telegram.md`;
       const filePath = join(telegramDir, fileName);
       await writeMdFile(filePath, frontmatter, text || '');
-      return { chatId, messageId, senderName, messageType, savedFilePath: filePath, timestamp };
+      return { chatId, messageId, senderName, messageType, savedFilePath: filePath, timestamp, status: 'unprocessed' };
     }
 
     // Voice or audio message
@@ -64,16 +67,19 @@ const saveContent = createStep({
     const buffer = await downloadFile(fileInfo.file_path);
     await writeBinaryFile(audioFilePath, buffer, { mkdir: true });
 
-    // Create companion .md with metadata
+    // Transcribe audio inline
+    const transcription = await transcribeAudioBuffer(buffer, audioFileName);
+
+    // Create companion .md with transcription as body
     if (duration !== undefined) frontmatter.duration = duration;
     if (mimeType) frontmatter.mimeType = mimeType;
     frontmatter.audioFile = audioFileName;
 
     const mdFileName = `${dateSlug}-telegram.md`;
     const mdFilePath = join(telegramDir, mdFileName);
-    await writeMdFile(mdFilePath, frontmatter, `Audio note saved: \`${audioFileName}\``);
+    await writeMdFile(mdFilePath, frontmatter, transcription);
 
-    return { chatId, messageId, senderName, messageType, savedFilePath: audioFilePath, timestamp };
+    return { chatId, messageId, senderName, messageType, savedFilePath: mdFilePath, timestamp, status: 'unprocessed' };
   },
 });
 
@@ -87,7 +93,7 @@ const sendReply = createStep({
     if (!inputData) throw new Error('Input data required');
 
     const { chatId, messageId, messageType, savedFilePath, timestamp } = inputData;
-    const replyText = messageType === 'text' ? 'Text note saved.' : 'Audio note saved.';
+    const replyText = 'Note saved, being processed.';
 
     try {
       const reply = await sendMessage(chatId, replyText, { replyToMessageId: messageId });

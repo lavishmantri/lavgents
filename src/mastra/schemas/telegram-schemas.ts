@@ -21,6 +21,7 @@ export const saveContentOutputSchema = z.object({
   messageType: z.enum(['text', 'voice', 'audio']),
   savedFilePath: z.string(),
   timestamp: z.string(),
+  status: z.string().optional(),
 });
 
 // Step 2 / final output: send-reply

@@ -1,6 +1,16 @@
-import crypto from 'crypto';
-import type { Mastra } from '@mastra/core/mastra';
-import type { TelegramNoteInput } from '../schemas/telegram-schemas';
+import type { Mastra } from "@mastra/core/mastra";
+import crypto from "crypto";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { TelegramNoteInput } from "../schemas/telegram-schemas";
+import {
+  answerCallbackQuery,
+  editMessageText,
+  sendMessageWithKeyboard,
+} from "../integrations/telegram";
+import { readMdFile, listMdFiles } from "../tools/read-utils";
+import { parseVaultIndex } from "../workflows/voice-note-workflow";
+import { NOTES_ROOT } from "../config/paths";
 
 /**
  * Webhook handlers for external service integrations.
@@ -18,19 +28,19 @@ import type { TelegramNoteInput } from '../schemas/telegram-schemas';
 export function verifyGitHubSignature(
   payload: string,
   signature: string,
-  secret: string
+  secret: string,
 ): boolean {
   if (!signature || !secret) return false;
 
   const expected = `sha256=${crypto
-    .createHmac('sha256', secret)
+    .createHmac("sha256", secret)
     .update(payload)
-    .digest('hex')}`;
+    .digest("hex")}`;
 
   try {
     return crypto.timingSafeEqual(
       Buffer.from(signature),
-      Buffer.from(expected)
+      Buffer.from(expected),
     );
   } catch {
     return false;
@@ -45,7 +55,7 @@ export function verifySlackSignature(
   payload: string,
   timestamp: string,
   signature: string,
-  signingSecret: string
+  signingSecret: string,
 ): boolean {
   if (!signature || !timestamp || !signingSecret) return false;
 
@@ -56,14 +66,14 @@ export function verifySlackSignature(
 
   const sigBasestring = `v0:${timestamp}:${payload}`;
   const expected = `v0=${crypto
-    .createHmac('sha256', signingSecret)
+    .createHmac("sha256", signingSecret)
     .update(sigBasestring)
-    .digest('hex')}`;
+    .digest("hex")}`;
 
   try {
     return crypto.timingSafeEqual(
       Buffer.from(signature),
-      Buffer.from(expected)
+      Buffer.from(expected),
     );
   } catch {
     return false;
@@ -114,7 +124,7 @@ export interface SlackWebhookEvent {
  */
 export async function handleGitHubEvent(
   eventType: string,
-  event: GitHubWebhookEvent
+  event: GitHubWebhookEvent,
 ): Promise<void> {
   console.log(`[GitHub Webhook] Received ${eventType}:`, {
     action: event.action,
@@ -124,19 +134,29 @@ export async function handleGitHubEvent(
 
   // Example: Handle specific events
   switch (eventType) {
-    case 'push':
+    case "push":
       // Handle push event
-      console.log('[GitHub] Push to', event.repository?.full_name);
+      console.log("[GitHub] Push to", event.repository?.full_name);
       break;
 
-    case 'pull_request':
+    case "pull_request":
       // Handle PR events
-      console.log('[GitHub] PR', event.action, 'on', event.repository?.full_name);
+      console.log(
+        "[GitHub] PR",
+        event.action,
+        "on",
+        event.repository?.full_name,
+      );
       break;
 
-    case 'issues':
+    case "issues":
       // Handle issue events
-      console.log('[GitHub] Issue', event.action, 'on', event.repository?.full_name);
+      console.log(
+        "[GitHub] Issue",
+        event.action,
+        "on",
+        event.repository?.full_name,
+      );
       break;
 
     default:
@@ -148,33 +168,35 @@ export async function handleGitHubEvent(
  * Process a verified Slack webhook event.
  * Implement your business logic here.
  */
-export async function handleSlackEvent(event: SlackWebhookEvent): Promise<void> {
+export async function handleSlackEvent(
+  event: SlackWebhookEvent,
+): Promise<void> {
   console.log(`[Slack Webhook] Received ${event.type}:`, event.event);
 
   // Handle URL verification challenge
-  if (event.type === 'url_verification') {
+  if (event.type === "url_verification") {
     // The challenge response is handled in the route
     return;
   }
 
   // Handle event callbacks
-  if (event.type === 'event_callback' && event.event) {
+  if (event.type === "event_callback" && event.event) {
     const innerEvent = event.event;
 
     switch (innerEvent.type) {
-      case 'message':
+      case "message":
         // Handle new messages
-        console.log('[Slack] Message in', innerEvent.channel);
+        console.log("[Slack] Message in", innerEvent.channel);
         break;
 
-      case 'app_mention':
+      case "app_mention":
         // Handle @mentions of your app
-        console.log('[Slack] App mentioned by', innerEvent.user);
+        console.log("[Slack] App mentioned by", innerEvent.user);
         break;
 
-      case 'reaction_added':
+      case "reaction_added":
         // Handle emoji reactions
-        console.log('[Slack] Reaction added:', innerEvent.reaction);
+        console.log("[Slack] Reaction added:", innerEvent.reaction);
         break;
 
       default:
@@ -198,19 +220,19 @@ export const githubWebhookHandler = async (c: {
   };
   json: (data: unknown, status?: number) => Response;
 }) => {
-  const signature = c.req.header('x-hub-signature-256') || '';
-  const eventType = c.req.header('x-github-event') || 'unknown';
+  const signature = c.req.header("x-hub-signature-256") || "";
+  const eventType = c.req.header("x-github-event") || "unknown";
   const body = await c.req.text();
 
   const secret = process.env.GITHUB_WEBHOOK_SECRET;
   if (!secret) {
-    console.error('[GitHub Webhook] GITHUB_WEBHOOK_SECRET not configured');
-    return c.json({ error: 'Webhook not configured' }, 500);
+    console.error("[GitHub Webhook] GITHUB_WEBHOOK_SECRET not configured");
+    return c.json({ error: "Webhook not configured" }, 500);
   }
 
   if (!verifyGitHubSignature(body, signature, secret)) {
-    console.warn('[GitHub Webhook] Invalid signature');
-    return c.json({ error: 'Invalid signature' }, 401);
+    console.warn("[GitHub Webhook] Invalid signature");
+    return c.json({ error: "Invalid signature" }, 401);
   }
 
   try {
@@ -218,8 +240,8 @@ export const githubWebhookHandler = async (c: {
     await handleGitHubEvent(eventType, event);
     return c.json({ ok: true });
   } catch (err) {
-    console.error('[GitHub Webhook] Error processing event:', err);
-    return c.json({ error: 'Processing failed' }, 500);
+    console.error("[GitHub Webhook] Error processing event:", err);
+    return c.json({ error: "Processing failed" }, 500);
   }
 };
 
@@ -234,34 +256,34 @@ export const slackWebhookHandler = async (c: {
   };
   json: (data: unknown, status?: number) => Response;
 }) => {
-  const signature = c.req.header('x-slack-signature') || '';
-  const timestamp = c.req.header('x-slack-request-timestamp') || '';
+  const signature = c.req.header("x-slack-signature") || "";
+  const timestamp = c.req.header("x-slack-request-timestamp") || "";
   const body = await c.req.text();
 
   const secret = process.env.SLACK_SIGNING_SECRET;
   if (!secret) {
-    console.error('[Slack Webhook] SLACK_SIGNING_SECRET not configured');
-    return c.json({ error: 'Webhook not configured' }, 500);
+    console.error("[Slack Webhook] SLACK_SIGNING_SECRET not configured");
+    return c.json({ error: "Webhook not configured" }, 500);
   }
 
   if (!verifySlackSignature(body, timestamp, signature, secret)) {
-    console.warn('[Slack Webhook] Invalid signature');
-    return c.json({ error: 'Invalid signature' }, 401);
+    console.warn("[Slack Webhook] Invalid signature");
+    return c.json({ error: "Invalid signature" }, 401);
   }
 
   try {
     const event = JSON.parse(body) as SlackWebhookEvent;
 
     // Handle Slack URL verification challenge
-    if (event.type === 'url_verification' && event.challenge) {
+    if (event.type === "url_verification" && event.challenge) {
       return c.json({ challenge: event.challenge });
     }
 
     await handleSlackEvent(event);
     return c.json({ ok: true });
   } catch (err) {
-    console.error('[Slack Webhook] Error processing event:', err);
-    return c.json({ error: 'Processing failed' }, 500);
+    console.error("[Slack Webhook] Error processing event:", err);
+    return c.json({ error: "Processing failed" }, 500);
   }
 };
 
@@ -323,16 +345,33 @@ export interface TelegramWebhookEvent {
       performer?: string;
     };
   };
+  callback_query?: {
+    id: string;
+    from: {
+      id: number;
+      is_bot: boolean;
+      first_name: string;
+    };
+    message?: {
+      message_id: number;
+      chat: { id: number };
+    };
+    data?: string;
+  };
 }
 
 /**
  * Extract workflow input from a Telegram webhook event.
  */
-function extractTelegramInput(event: TelegramWebhookEvent): TelegramNoteInput | null {
+function extractTelegramInput(
+  event: TelegramWebhookEvent,
+): TelegramNoteInput | null {
   const msg = event.message;
   if (!msg) return null;
 
-  const senderName = [msg.from?.first_name, msg.from?.last_name].filter(Boolean).join(' ') || 'Unknown';
+  const senderName =
+    [msg.from?.first_name, msg.from?.last_name].filter(Boolean).join(" ") ||
+    "Unknown";
 
   if (msg.voice) {
     return {
@@ -340,7 +379,7 @@ function extractTelegramInput(event: TelegramWebhookEvent): TelegramNoteInput | 
       messageId: msg.message_id,
       senderName,
       date: msg.date,
-      messageType: 'voice',
+      messageType: "voice",
       fileId: msg.voice.file_id,
       mimeType: msg.voice.mime_type,
       duration: msg.voice.duration,
@@ -353,7 +392,7 @@ function extractTelegramInput(event: TelegramWebhookEvent): TelegramNoteInput | 
       messageId: msg.message_id,
       senderName,
       date: msg.date,
-      messageType: 'audio',
+      messageType: "audio",
       fileId: msg.audio.file_id,
       mimeType: msg.audio.mime_type,
       duration: msg.audio.duration,
@@ -366,7 +405,7 @@ function extractTelegramInput(event: TelegramWebhookEvent): TelegramNoteInput | 
       messageId: msg.message_id,
       senderName,
       date: msg.date,
-      messageType: 'text',
+      messageType: "text",
       text: msg.text,
     };
   }
@@ -383,18 +422,74 @@ export async function handleTelegramMessage(
 ): Promise<void> {
   const input = extractTelegramInput(event);
   if (!input) {
-    console.log('[Telegram Webhook] Ignoring unsupported message type');
+    console.log("[Telegram Webhook] Ignoring unsupported message type");
     return;
   }
 
-  console.log(`[Telegram Webhook] Processing ${input.messageType} from ${input.senderName}`);
+  console.log(
+    `[Telegram Webhook] Processing ${input.messageType} from ${input.senderName}`,
+  );
 
-  const workflow = mastra.getWorkflow('telegramNoteWorkflow');
+  const workflow = mastra.getWorkflow("telegramNoteWorkflow");
   const run = await workflow.createRun();
   const result = await run.start({ inputData: input });
 
-  if (result.status === 'failed') {
-    console.error('[Telegram Webhook] Workflow failed:', result);
+  if (result.status === "failed") {
+    console.error("[Telegram Webhook] Workflow failed:", result);
+  }
+}
+
+/**
+ * Handle a Telegram callback_query (inline keyboard button press).
+ * Callback data format:
+ *   route:confirm:<runId>     - user confirms suggested folder
+ *   route:change:<runId>      - user wants to pick a different folder
+ *   route:select:<folderId>:<runId> - user selected a specific folder
+ */
+export async function handleTelegramCallbackQuery(
+  event: TelegramWebhookEvent,
+  mastra: Mastra,
+): Promise<void> {
+  const cb = event.callback_query;
+  if (!cb?.data) return;
+
+  await answerCallbackQuery(cb.id);
+
+  const parts = cb.data.split(":");
+  const action = parts[1]; // confirm | change | select
+
+  if (action === "confirm") {
+    const runId = parts[2];
+    const workflow = mastra.getWorkflow("noteRouterWorkflow");
+    const run = await workflow.createRun({ runId });
+    await run.resume({
+      resumeData: { confirmed: true },
+      step: "await-confirmation",
+    });
+  } else if (action === "change") {
+    // Show folder selection keyboard
+    const runId = parts[2];
+    const chatId = cb.message?.chat.id;
+    if (!chatId) return;
+
+    const indexPath = join(NOTES_ROOT, "vault-index.md");
+    const raw = await readFile(indexPath, "utf-8");
+    const folders = parseVaultIndex(raw);
+
+    const keyboard = folders.map((f) => [
+      { text: f.name, callback_data: `route:select:${f.id}:${runId}` },
+    ]);
+
+    await sendMessageWithKeyboard(chatId, "Choose a folder:", keyboard);
+  } else if (action === "select") {
+    const folderId = parts[2];
+    const runId = parts[3];
+    const workflow = mastra.getWorkflow("noteRouterWorkflow");
+    const run = await workflow.createRun({ runId });
+    await run.resume({
+      resumeData: { confirmed: true, selectedFolderId: folderId },
+      step: "await-confirmation",
+    });
   }
 }
 
@@ -410,27 +505,62 @@ export const telegramWebhookHandler = async (c: {
   json: (data: unknown, status?: number) => Response;
   get: (key: string) => unknown;
 }) => {
-  const secretToken = c.req.header('x-telegram-bot-api-secret-token') || '';
+  const secretToken = c.req.header("x-telegram-bot-api-secret-token") || "";
   const body = await c.req.text();
 
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
   if (!secret) {
-    console.error('[Telegram Webhook] TELEGRAM_WEBHOOK_SECRET not configured');
-    return c.json({ error: 'Webhook not configured' }, 500);
+    console.error("[Telegram Webhook] TELEGRAM_WEBHOOK_SECRET not configured");
+    return c.json({ error: "Webhook not configured" }, 500);
   }
 
   if (!verifyTelegramSecret(secretToken, secret)) {
-    console.warn('[Telegram Webhook] Invalid secret token');
-    return c.json({ error: 'Invalid secret token' }, 401);
+    console.warn("[Telegram Webhook] Invalid secret token");
+    return c.json({ error: "Invalid secret token" }, 401);
   }
 
   try {
     const event = JSON.parse(body) as TelegramWebhookEvent;
-    const mastra = c.get('mastra') as Mastra;
-    await handleTelegramMessage(event, mastra);
+    const mastra = c.get("mastra") as Mastra;
+
+    if (event.callback_query) {
+      await handleTelegramCallbackQuery(event, mastra);
+    } else {
+      await handleTelegramMessage(event, mastra);
+    }
+
     return c.json({ ok: true });
   } catch (err) {
-    console.error('[Telegram Webhook] Error processing event:', err);
-    return c.json({ error: 'Processing failed' }, 500);
+    console.error("[Telegram Webhook] Error processing event:", err);
+    return c.json({ error: "Processing failed" }, 500);
   }
 };
+
+/**
+ * Scan for unprocessed notes and kick off note-router workflows.
+ */
+export async function processNotesHandler(mastra: Mastra): Promise<{ processed: number; skipped: number }> {
+  const telegramDir = join(NOTES_ROOT, "telegram");
+  const files = await listMdFiles(telegramDir);
+
+  let processed = 0;
+  let skipped = 0;
+
+  for (const filePath of files) {
+    const { frontmatter } = await readMdFile(filePath);
+    if (frontmatter.status !== "unprocessed") {
+      skipped++;
+      continue;
+    }
+
+    const workflow = mastra.getWorkflow("noteRouterWorkflow");
+    const run = await workflow.createRun();
+    run.start({ inputData: { filePath } }).catch((err: unknown) => {
+      console.error(`[ProcessNotes] Workflow failed for ${filePath}:`, err);
+    });
+
+    processed++;
+  }
+
+  return { processed, skipped };
+}

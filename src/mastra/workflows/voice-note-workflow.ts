@@ -1,5 +1,4 @@
 import { createStep, createWorkflow } from '@mastra/core/workflows';
-import { z } from 'zod';
 import { readFile } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import {
@@ -11,7 +10,7 @@ import {
   writeToInboxOutputSchema,
 } from '../schemas/voice-note-schemas';
 import { writeMdFile } from '../tools/write-utils';
-import { isOfflineMode } from '../config/model';
+import { transcribeAudioBuffer } from '../tools/transcribe';
 import { NOTES_ROOT } from '../config/paths';
 
 // Step 1: Check if transcription is already provided or exists as sidecar .txt
@@ -55,50 +54,13 @@ const transcribeAudio = createStep({
 
     const { audioFilePath, transcription, needsTranscription } = inputData;
 
-    // If transcription already exists, pass through
     if (!needsTranscription && transcription) {
       return { audioFilePath, transcription };
     }
 
     const audioBuffer = await readFile(audioFilePath);
-    const blob = new Blob([audioBuffer]);
-    const formData = new FormData();
-    formData.append('file', blob, basename(audioFilePath));
-
-    let transcriptionUrl: string;
-    const headers: Record<string, string> = {};
-
-    if (isOfflineMode) {
-      const whisperBase = process.env.WHISPER_BASE_URL || 'http://localhost:8080/v1';
-      transcriptionUrl = `${whisperBase}/audio/transcriptions`;
-      formData.append('model', 'Systran/faster-whisper-base.en');
-    } else {
-      const apiKey = process.env.OPENAI_API_KEY;
-      if (!apiKey) {
-        throw new Error('OPENAI_API_KEY environment variable is required for transcription');
-      }
-      transcriptionUrl = 'https://api.openai.com/v1/audio/transcriptions';
-      headers['Authorization'] = `Bearer ${apiKey}`;
-      formData.append('model', 'whisper-1');
-    }
-
-    const response = await fetch(transcriptionUrl, {
-      method: 'POST',
-      headers,
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorBody = await response.text();
-      throw new Error(`Whisper API error (${response.status}): ${errorBody}`);
-    }
-
-    const result = await response.json() as { text?: string };
-    if (!result.text) {
-      throw new Error('Whisper returned empty transcription');
-    }
-
-    return { audioFilePath, transcription: result.text };
+    const text = await transcribeAudioBuffer(audioBuffer, basename(audioFilePath));
+    return { audioFilePath, transcription: text };
   },
 });
 
@@ -142,36 +104,38 @@ const parseVoiceCommand = createStep({
   },
 });
 
-// Folder config schema for type safety
-const folderConfigSchema = z.object({
-  folders: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    keywords: z.array(z.string()),
-    vaultPath: z.string(),
-  })),
-  defaultFolder: z.object({
-    id: z.string(),
-    name: z.string(),
-    vaultPath: z.string(),
-  }),
-});
+/**
+ * Parse vault-index.md into a list of folder entries.
+ * Each H2 section becomes a folder with id, name, path, and purpose.
+ */
+export function parseVaultIndex(markdown: string): { id: string; name: string; vaultPath: string }[] {
+  const sections = markdown.split(/^## /m).slice(1);
+  return sections.map(section => {
+    const lines = section.trim().split('\n');
+    const name = lines[0].replace(/\s*\(default\)\s*/i, '').trim();
+    const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-$/, '');
+    const pathMatch = section.match(/\*\*Path\*\*:\s*(.+)/);
+    const vaultPath = pathMatch ? pathMatch[1].trim() : id;
+    return { id, name, vaultPath };
+  });
+}
 
-// Step 4: Resolve target folder from folder-config.json
+// Step 4: Resolve target folder from vault-index.md
 const resolveFolder = createStep({
   id: 'resolve-folder',
-  description: 'Reads folder-config.json and resolves target folder path',
+  description: 'Reads vault-index.md and resolves target folder path',
   inputSchema: parseVoiceCommandOutputSchema,
   outputSchema: resolveFolderOutputSchema,
   execute: async ({ inputData }) => {
     if (!inputData) throw new Error('Input data required');
 
-    const configPath = join(NOTES_ROOT, 'folder-config.json');
-    const raw = await readFile(configPath, 'utf-8');
-    const config = folderConfigSchema.parse(JSON.parse(raw));
+    const indexPath = join(NOTES_ROOT, 'vault-index.md');
+    const raw = await readFile(indexPath, 'utf-8');
+    const folders = parseVaultIndex(raw);
 
-    const matched = config.folders.find(f => f.id === inputData.targetFolder);
-    const folder = matched || config.defaultFolder;
+    const matched = folders.find(f => f.id === inputData.targetFolder || f.vaultPath === inputData.targetFolder);
+    const fallback = folders.find(f => f.id === 'inbox') || { id: 'inbox', name: 'Inbox', vaultPath: 'inbox' };
+    const folder = matched || fallback;
 
     return {
       ...inputData,
