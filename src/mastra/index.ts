@@ -16,7 +16,8 @@ import { noteRouterWorkflow } from './workflows/note-router-workflow';
 import { processNotesWorkflow } from './workflows/process-notes-workflow';
 import { registerApiRoute } from '@mastra/core/server';
 import { telegramWebhookHandler } from './webhooks/handlers';
-import cron from 'node-cron';
+import { CronScheduler } from './scheduler/scheduler.js';
+import { cronJobs } from './scheduler/jobs.js';
 
 export const mastra = new Mastra({
   workflows: {
@@ -65,15 +66,11 @@ export const mastra = new Mastra({
   }),
 });
 
-// Process unprocessed notes every 5 minutes
-cron.schedule('*/5 * * * *', async () => {
-  console.log('[Cron] Processing unprocessed notes...');
-  try {
-    const workflow = mastra.getWorkflow('processNotesWorkflow');
-    const run = await workflow.createRun();
-    const result = await run.start({ inputData: {} });
-    console.log(`[Cron] Workflow finished:`, result.result);
-  } catch (err) {
-    console.error('[Cron] Error processing notes:', err);
-  }
+// Start cron scheduler with worker thread + LibSQL persistence
+const scheduler = new CronScheduler('file:../mastra.db');
+for (const job of cronJobs) {
+  scheduler.register(job);
+}
+scheduler.start(mastra).catch((err) => {
+  console.error('[CronScheduler] Failed to start:', err);
 });

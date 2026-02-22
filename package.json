@@ -27,13 +27,12 @@
     "@notionhq/client": "^2.3.0",
     "@octokit/rest": "^21.0.0",
     "@slack/web-api": "^7.8.0",
+    "croner": "^10.0.1",
     "googleapis": "^146.0.0",
-    "node-cron": "^4.2.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^25.0.10",
-    "@types/node-cron": "^3.0.11",
     "mastra": "^1.0.1",
     "typescript": "^5.9.3"
   }
