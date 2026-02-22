@@ -26,6 +26,8 @@ export async function transcribeAudioBuffer(buffer: Buffer, fileName: string): P
     formData.append('model', 'whisper-1');
   }
 
+  formData.append('language', 'en');
+
   const response = await fetch(transcriptionUrl, {
     method: 'POST',
     headers,
