@@ -61,25 +61,35 @@ const saveContent = createStep({
     const audioFileName = `${dateSlug}-telegram.${ext}`;
     const audioFilePath = join(telegramDir, audioFileName);
 
-    // Download and save binary
-    const fileInfo = await getFile(fileId);
-    if (!fileInfo.file_path) throw new Error('Telegram getFile did not return file_path');
-    const buffer = await downloadFile(fileInfo.file_path);
-    await writeBinaryFile(audioFilePath, buffer, { mkdir: true });
+    try {
+      // Download and save binary
+      const fileInfo = await getFile(fileId);
+      if (!fileInfo.file_path) throw new Error('Telegram getFile did not return file_path');
+      const buffer = await downloadFile(fileInfo.file_path);
+      await writeBinaryFile(audioFilePath, buffer, { mkdir: true });
 
-    // Transcribe audio inline
-    const transcription = await transcribeAudioBuffer(buffer, audioFileName);
+      // Transcribe audio inline
+      const transcription = await transcribeAudioBuffer(buffer, audioFileName);
 
-    // Create companion .md with transcription as body
-    if (duration !== undefined) frontmatter.duration = duration;
-    if (mimeType) frontmatter.mimeType = mimeType;
-    frontmatter.audioFile = audioFileName;
+      // Create companion .md with transcription as body
+      if (duration !== undefined) frontmatter.duration = duration;
+      if (mimeType) frontmatter.mimeType = mimeType;
+      frontmatter.audioFile = audioFileName;
 
-    const mdFileName = `${dateSlug}-telegram.md`;
-    const mdFilePath = join(telegramDir, mdFileName);
-    await writeMdFile(mdFilePath, frontmatter, transcription);
+      const mdFileName = `${dateSlug}-telegram.md`;
+      const mdFilePath = join(telegramDir, mdFileName);
+      await writeMdFile(mdFilePath, frontmatter, transcription);
 
-    return { chatId, messageId, senderName, messageType, savedFilePath: mdFilePath, timestamp, status: 'unprocessed' };
+      return { chatId, messageId, senderName, messageType, savedFilePath: mdFilePath, timestamp, status: 'unprocessed' };
+    } catch (err) {
+      // Notify user so they know the note was lost
+      try {
+        await sendMessage(chatId, 'Failed to save note. Please resend.', { replyToMessageId: messageId });
+      } catch (notifyErr) {
+        console.error('[Telegram] Failed to send failure notification:', notifyErr);
+      }
+      throw err;
+    }
   },
 });
 

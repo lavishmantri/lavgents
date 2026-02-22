@@ -7,6 +7,36 @@
 
 const TELEGRAM_API_BASE = 'https://api.telegram.org';
 
+const RETRY_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 1000;
+const FETCH_TIMEOUT_MS = 30_000;
+
+/**
+ * Fetch with retry and per-attempt timeout.
+ * Uses exponential backoff: 1s, 2s, 4s.
+ */
+async function fetchWithRetry(url: string, init?: RequestInit): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, { ...init, signal: controller.signal });
+      return response;
+    } catch (err) {
+      lastError = err;
+      if (attempt < RETRY_ATTEMPTS - 1) {
+        const delay = RETRY_BASE_DELAY_MS * 2 ** attempt;
+        console.warn(`[Telegram] fetch attempt ${attempt + 1} failed, retrying in ${delay}ms...`, err);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastError;
+}
+
 /**
  * Get the Telegram bot token from environment.
  */
@@ -55,7 +85,7 @@ interface TelegramApiResponse<T> {
  */
 export async function getFile(fileId: string): Promise<TelegramFile> {
   const token = getBotToken();
-  const response = await fetch(`${TELEGRAM_API_BASE}/bot${token}/getFile`, {
+  const response = await fetchWithRetry(`${TELEGRAM_API_BASE}/bot${token}/getFile`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ file_id: fileId }),
@@ -80,7 +110,7 @@ export async function getFile(fileId: string): Promise<TelegramFile> {
  */
 export async function downloadFile(filePath: string): Promise<Buffer> {
   const token = getBotToken();
-  const response = await fetch(`${TELEGRAM_API_BASE}/file/bot${token}/${filePath}`);
+  const response = await fetchWithRetry(`${TELEGRAM_API_BASE}/file/bot${token}/${filePath}`);
 
   if (!response.ok) {
     throw new Error(`Telegram downloadFile error: ${response.status} ${response.statusText}`);
