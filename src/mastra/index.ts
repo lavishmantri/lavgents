@@ -13,8 +13,9 @@ import { voiceNoteAgent } from './agents/voice-note-agent';
 import { voiceNoteWorkflow } from './workflows/voice-note-workflow';
 import { telegramNoteWorkflow } from './workflows/telegram-note-workflow';
 import { noteRouterWorkflow } from './workflows/note-router-workflow';
+import { processNotesWorkflow } from './workflows/process-notes-workflow';
 import { registerApiRoute } from '@mastra/core/server';
-import { telegramWebhookHandler, processNotesHandler } from './webhooks/handlers';
+import { telegramWebhookHandler } from './webhooks/handlers';
 import cron from 'node-cron';
 
 export const mastra = new Mastra({
@@ -25,6 +26,7 @@ export const mastra = new Mastra({
     voiceNoteWorkflow,
     telegramNoteWorkflow,
     noteRouterWorkflow,
+    processNotesWorkflow,
   },
   agents: { weatherAgent, emailClassifierAgent, voiceNoteAgent },
   scorers: { toolCallAppropriatenessScorer, completenessScorer, translationScorer },
@@ -44,19 +46,6 @@ export const mastra = new Mastra({
       registerApiRoute('/webhooks/telegram', {
         method: 'POST',
         handler: telegramWebhookHandler,
-      }),
-      registerApiRoute('/api/process-notes', {
-        method: 'POST',
-        handler: async (c: { json: (data: unknown, status?: number) => Response; get: (key: string) => unknown }) => {
-          try {
-            const m = c.get('mastra') as Mastra;
-            const result = await processNotesHandler(m);
-            return c.json(result);
-          } catch (err) {
-            console.error('[ProcessNotes] Error:', err);
-            return c.json({ error: 'Processing failed' }, 500);
-          }
-        },
       }),
     ],
   },
@@ -80,8 +69,10 @@ export const mastra = new Mastra({
 cron.schedule('*/5 * * * *', async () => {
   console.log('[Cron] Processing unprocessed notes...');
   try {
-    const result = await processNotesHandler(mastra);
-    console.log(`[Cron] Processed: ${result.processed}, Skipped: ${result.skipped}`);
+    const workflow = mastra.getWorkflow('processNotesWorkflow');
+    const run = await workflow.createRun();
+    const result = await run.start({ inputData: {} });
+    console.log(`[Cron] Workflow finished:`, result.result);
   } catch (err) {
     console.error('[Cron] Error processing notes:', err);
   }

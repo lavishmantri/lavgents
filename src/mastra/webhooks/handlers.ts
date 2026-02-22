@@ -8,7 +8,6 @@ import {
   editMessageText,
   sendMessageWithKeyboard,
 } from "../integrations/telegram";
-import { readMdFile, listMdFiles } from "../tools/read-utils";
 import { parseVaultIndex } from "../workflows/voice-note-workflow";
 import { NOTES_ROOT } from "../config/paths";
 
@@ -535,32 +534,3 @@ export const telegramWebhookHandler = async (c: {
     return c.json({ error: "Processing failed" }, 500);
   }
 };
-
-/**
- * Scan for unprocessed notes and kick off note-router workflows.
- */
-export async function processNotesHandler(mastra: Mastra): Promise<{ processed: number; skipped: number }> {
-  const telegramDir = join(NOTES_ROOT, "telegram");
-  const files = await listMdFiles(telegramDir);
-
-  let processed = 0;
-  let skipped = 0;
-
-  for (const filePath of files) {
-    const { frontmatter } = await readMdFile(filePath);
-    if (frontmatter.status !== "unprocessed") {
-      skipped++;
-      continue;
-    }
-
-    const workflow = mastra.getWorkflow("noteRouterWorkflow");
-    const run = await workflow.createRun();
-    run.start({ inputData: { filePath } }).catch((err: unknown) => {
-      console.error(`[ProcessNotes] Workflow failed for ${filePath}:`, err);
-    });
-
-    processed++;
-  }
-
-  return { processed, skipped };
-}
