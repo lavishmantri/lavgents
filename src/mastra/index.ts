@@ -14,6 +14,9 @@ import { voiceNoteWorkflow } from './workflows/voice-note-workflow';
 import { telegramNoteWorkflow } from './workflows/telegram-note-workflow';
 import { noteRouterWorkflow } from './workflows/note-router-workflow';
 import { processNotesWorkflow } from './workflows/process-notes-workflow';
+import { hiringPipelineWorkflow } from './workflows/hiring-pipeline-workflow';
+import { hiringScreeningAgent } from './agents/hiring-screening-agent';
+import { hiringInterviewPrepAgent } from './agents/hiring-interview-prep-agent';
 import { registerApiRoute } from '@mastra/core/server';
 import { telegramWebhookHandler } from './webhooks/handlers';
 import { CronScheduler } from './scheduler/scheduler.js';
@@ -28,8 +31,9 @@ export const mastra = new Mastra({
     telegramNoteWorkflow,
     noteRouterWorkflow,
     processNotesWorkflow,
+    hiringPipelineWorkflow,
   },
-  agents: { weatherAgent, emailClassifierAgent, voiceNoteAgent },
+  agents: { weatherAgent, emailClassifierAgent, voiceNoteAgent, hiringScreeningAgent, hiringInterviewPrepAgent },
   scorers: { toolCallAppropriatenessScorer, completenessScorer, translationScorer },
   bundler: {
     sourcemap: true,

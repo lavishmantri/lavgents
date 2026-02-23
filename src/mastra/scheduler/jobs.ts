@@ -11,4 +11,10 @@ export const cronJobs: CronJobDefinition[] = [
     workflowId: 'processNotesWorkflow',
     inputData: {},
   },
+  {
+    id: 'hiring-pipeline',
+    schedule: '30 0 * * *',
+    workflowId: 'hiringPipelineWorkflow',
+    inputData: {},
+  },
 ];

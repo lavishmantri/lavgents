@@ -29,11 +29,13 @@
     "@slack/web-api": "^7.8.0",
     "croner": "^10.0.1",
     "googleapis": "^146.0.0",
+    "pdf-parse": "^1.1.1",
     "undici": "^7.22.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^25.0.10",
+    "@types/pdf-parse": "^1.1.4",
     "mastra": "^1.0.1",
     "typescript": "^5.9.3"
   }
