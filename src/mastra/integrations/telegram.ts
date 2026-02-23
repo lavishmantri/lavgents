@@ -5,11 +5,19 @@
  * API Documentation: https://core.telegram.org/bots/api
  */
 
+import { Agent } from 'undici';
+
 const TELEGRAM_API_BASE = 'https://api.telegram.org';
 
 const RETRY_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 1000;
 const FETCH_TIMEOUT_MS = 30_000;
+
+// Node 24's undici v7 defaults autoSelectFamilyAttemptTimeout to 250ms (Happy Eyeballs).
+// Telegram servers (~400ms RTT) exceed that, causing ETIMEDOUT on every connection.
+const telegramAgent = new Agent({
+  connect: { autoSelectFamilyAttemptTimeout: 5_000 },
+});
 
 /**
  * Fetch with retry and per-attempt timeout.
@@ -21,7 +29,11 @@ async function fetchWithRetry(url: string, init?: RequestInit): Promise<Response
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-      const response = await fetch(url, { ...init, signal: controller.signal });
+      const response = await fetch(url, {
+        ...init,
+        signal: controller.signal,
+        dispatcher: telegramAgent,
+      } as RequestInit);
       return response;
     } catch (err) {
       lastError = err;
@@ -138,7 +150,7 @@ export async function sendMessage(
     body.reply_parameters = { message_id: opts.replyToMessageId };
   }
 
-  const response = await fetch(`${TELEGRAM_API_BASE}/bot${token}/sendMessage`, {
+  const response = await fetchWithRetry(`${TELEGRAM_API_BASE}/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -173,7 +185,7 @@ export async function sendMessageWithKeyboard(
     reply_markup: { inline_keyboard: keyboard },
   };
 
-  const response = await fetch(`${TELEGRAM_API_BASE}/bot${token}/sendMessage`, {
+  const response = await fetchWithRetry(`${TELEGRAM_API_BASE}/bot${token}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -197,7 +209,7 @@ export async function sendMessageWithKeyboard(
 export async function answerCallbackQuery(callbackQueryId: string): Promise<void> {
   const token = getBotToken();
 
-  const response = await fetch(`${TELEGRAM_API_BASE}/bot${token}/answerCallbackQuery`, {
+  const response = await fetchWithRetry(`${TELEGRAM_API_BASE}/bot${token}/answerCallbackQuery`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ callback_query_id: callbackQueryId }),
@@ -218,7 +230,7 @@ export async function editMessageText(
 ): Promise<void> {
   const token = getBotToken();
 
-  const response = await fetch(`${TELEGRAM_API_BASE}/bot${token}/editMessageText`, {
+  const response = await fetchWithRetry(`${TELEGRAM_API_BASE}/bot${token}/editMessageText`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: chatId, message_id: messageId, text }),
