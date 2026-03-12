@@ -93,6 +93,14 @@ export interface GitHubWebhookEvent {
     full_name: string;
     html_url: string;
   };
+  pull_request?: {
+    number: number;
+    title: string;
+    body: string | null;
+    user: {
+      login: string;
+    };
+  };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
 }
@@ -124,6 +132,7 @@ export interface SlackWebhookEvent {
 export async function handleGitHubEvent(
   eventType: string,
   event: GitHubWebhookEvent,
+  mastra: Mastra,
 ): Promise<void> {
   console.log(`[GitHub Webhook] Received ${eventType}:`, {
     action: event.action,
@@ -131,25 +140,43 @@ export async function handleGitHubEvent(
     sender: event.sender?.login,
   });
 
-  // Example: Handle specific events
   switch (eventType) {
     case "push":
-      // Handle push event
       console.log("[GitHub] Push to", event.repository?.full_name);
       break;
 
     case "pull_request":
-      // Handle PR events
       console.log(
         "[GitHub] PR",
         event.action,
         "on",
         event.repository?.full_name,
       );
+
+      if (event.action === "opened" && event.pull_request && event.repository) {
+        const [owner, repo] = event.repository.full_name.split("/");
+        const pr = event.pull_request;
+
+        const workflow = mastra.getWorkflow("prReviewWorkflow");
+        const run = await workflow.createRun();
+        const result = await run.start({
+          inputData: {
+            owner,
+            repo,
+            pullNumber: pr.number,
+            prTitle: pr.title,
+            prBody: pr.body ?? undefined,
+            prAuthor: pr.user.login,
+          },
+        });
+
+        if (result.status === "failed") {
+          console.error("[GitHub] PR review workflow failed:", result);
+        }
+      }
       break;
 
     case "issues":
-      // Handle issue events
       console.log(
         "[GitHub] Issue",
         event.action,
@@ -218,6 +245,7 @@ export const githubWebhookHandler = async (c: {
     text: () => Promise<string>;
   };
   json: (data: unknown, status?: number) => Response;
+  get: (key: string) => unknown;
 }) => {
   const signature = c.req.header("x-hub-signature-256") || "";
   const eventType = c.req.header("x-github-event") || "unknown";
@@ -236,7 +264,8 @@ export const githubWebhookHandler = async (c: {
 
   try {
     const event = JSON.parse(body) as GitHubWebhookEvent;
-    await handleGitHubEvent(eventType, event);
+    const mastra = c.get("mastra") as Mastra;
+    await handleGitHubEvent(eventType, event, mastra);
     return c.json({ ok: true });
   } catch (err) {
     console.error("[GitHub Webhook] Error processing event:", err);

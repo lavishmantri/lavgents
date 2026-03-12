@@ -218,6 +218,32 @@ export async function addPullRequestReviewComment(
   return response.data;
 }
 
+/**
+ * List files changed in a pull request with their patches.
+ * Uses pagination to fetch all files.
+ */
+export async function listPullRequestFiles(
+  connectionId: string,
+  owner: string,
+  repo: string,
+  pullNumber: number
+) {
+  const octokit = await getOctokit(connectionId);
+  const files = await octokit.paginate(octokit.pulls.listFiles, {
+    owner,
+    repo,
+    pull_number: pullNumber,
+    per_page: 100,
+  });
+  return files.map((f) => ({
+    filename: f.filename,
+    status: f.status,
+    patch: f.patch,
+    additions: f.additions,
+    deletions: f.deletions,
+  }));
+}
+
 // ============================================================================
 // User Operations
 // ============================================================================

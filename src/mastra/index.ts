@@ -15,10 +15,11 @@ import { telegramNoteWorkflow } from './workflows/telegram-note-workflow';
 import { noteRouterWorkflow } from './workflows/note-router-workflow';
 import { processNotesWorkflow } from './workflows/process-notes-workflow';
 import { hiringPipelineWorkflow } from './workflows/hiring-pipeline-workflow';
+import { prReviewWorkflow } from './workflows/pr-review-workflow';
 import { hiringScreeningAgent } from './agents/hiring-screening-agent';
 import { hiringInterviewPrepAgent } from './agents/hiring-interview-prep-agent';
 import { registerApiRoute } from '@mastra/core/server';
-import { telegramWebhookHandler } from './webhooks/handlers';
+import { telegramWebhookHandler, githubWebhookHandler } from './webhooks/handlers';
 import { CronScheduler } from './scheduler/scheduler.js';
 import { cronJobs } from './scheduler/jobs.js';
 
@@ -32,6 +33,7 @@ export const mastra = new Mastra({
     noteRouterWorkflow,
     processNotesWorkflow,
     hiringPipelineWorkflow,
+    prReviewWorkflow,
   },
   agents: { weatherAgent, emailClassifierAgent, voiceNoteAgent, hiringScreeningAgent, hiringInterviewPrepAgent },
   scorers: { toolCallAppropriatenessScorer, completenessScorer, translationScorer },
@@ -51,6 +53,10 @@ export const mastra = new Mastra({
       registerApiRoute('/webhooks/telegram', {
         method: 'POST',
         handler: telegramWebhookHandler,
+      }),
+      registerApiRoute('/webhooks/github', {
+        method: 'POST',
+        handler: githubWebhookHandler,
       }),
     ],
   },
