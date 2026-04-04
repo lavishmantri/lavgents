@@ -1,0 +1,10 @@
+node_modules
+.mastra
+*.db
+*.db-*
+.env
+.env.development
+.git
+dist
+credentials/
+**/*.credentials.json

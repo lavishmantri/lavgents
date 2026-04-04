@@ -42,7 +42,7 @@ export const mastra = new Mastra({
   },
   storage: new LibSQLStore({
     id: "mastra-storage",
-    url: "file:../mastra.db",
+    url: "file:../data/mastra.db",
   }),
   logger: new PinoLogger({
     name: 'Mastra',
@@ -77,7 +77,7 @@ export const mastra = new Mastra({
 });
 
 // Start cron scheduler with worker thread + LibSQL persistence
-const scheduler = new CronScheduler('file:../mastra.db');
+const scheduler = new CronScheduler('file:../data/mastra.db');
 for (const job of cronJobs) {
   scheduler.register(job);
 }

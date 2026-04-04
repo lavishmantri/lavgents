@@ -28,7 +28,6 @@
     "@octokit/rest": "^21.0.0",
     "@slack/web-api": "^7.8.0",
     "croner": "^10.0.1",
-    "googleapis": "^146.0.0",
     "pdf-parse": "^1.1.1",
     "undici": "^7.22.0",
     "zod": "^4.3.6"

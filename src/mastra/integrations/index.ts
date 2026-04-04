@@ -2,7 +2,7 @@
  * Integration modules for external services.
  *
  * OAuth-based integrations (via Nango):
- * - google: Gmail, Calendar, Drive
+ * - google: Gmail (via Nango proxy)
  * - github: Repositories, Issues, PRs
  * - slack: Messages, Channels
  * - notion: Pages, Databases

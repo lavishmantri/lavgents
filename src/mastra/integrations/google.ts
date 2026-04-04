@@ -1,52 +1,35 @@
-import { calendar_v3, drive_v3, gmail_v1, google } from "googleapis";
-import { getToken } from "./nango";
+import { nango } from "./nango";
 
-/**
- * Create an authenticated OAuth2 client with Nango-managed token.
- *
- * @param connectionId - User's connection ID in Nango
- * @returns Configured OAuth2 client
- */
-async function getAuthClient(connectionId: string) {
-  const token = await getToken("google-mail", connectionId);
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials({ access_token: token });
-  return auth;
+const PROVIDER_CONFIG_KEY = "google-mail";
+
+// ============================================================================
+// Gmail API Response Types
+// ============================================================================
+
+interface GmailPayload {
+  headers?: Array<{ name: string; value: string }>;
+  body?: { data?: string };
+  parts?: GmailPayload[];
+  mimeType?: string;
+  filename?: string;
 }
 
-/**
- * Get authenticated Gmail client.
- *
- * @param connectionId - User's connection ID in Nango
- * @returns Gmail API client
- */
-export async function getGmail(connectionId: string): Promise<gmail_v1.Gmail> {
-  const auth = await getAuthClient(connectionId);
-  return google.gmail({ version: "v1", auth });
+interface GmailMessageResponse {
+  id: string;
+  threadId: string;
+  labelIds?: string[];
+  payload?: GmailPayload;
 }
 
-/**
- * Get authenticated Google Calendar client.
- *
- * @param connectionId - User's connection ID in Nango
- * @returns Calendar API client
- */
-export async function getCalendar(
-  connectionId: string,
-): Promise<calendar_v3.Calendar> {
-  const auth = await getAuthClient(connectionId);
-  return google.calendar({ version: "v3", auth });
+interface GmailListResponse {
+  messages?: Array<{ id: string; threadId: string }>;
+  nextPageToken?: string;
 }
 
-/**
- * Get authenticated Google Drive client.
- *
- * @param connectionId - User's connection ID in Nango
- * @returns Drive API client
- */
-export async function getDrive(connectionId: string): Promise<drive_v3.Drive> {
-  const auth = await getAuthClient(connectionId);
-  return google.drive({ version: "v3", auth });
+interface GmailLabel {
+  id: string;
+  name: string;
+  type?: string;
 }
 
 // ============================================================================
@@ -78,13 +61,11 @@ export async function fetchEmails(
   query: string,
   maxResults: number = 50,
 ): Promise<GmailMessage[]> {
-  const gmail = await getGmail(connectionId);
-
-  // List message IDs matching query
-  const listResponse = await gmail.users.messages.list({
-    userId: "me",
-    q: query,
-    maxResults,
+  const listResponse = await nango.get<GmailListResponse>({
+    providerConfigKey: PROVIDER_CONFIG_KEY,
+    connectionId,
+    endpoint: "/gmail/v1/users/me/messages",
+    params: { q: query, maxResults: String(maxResults) },
   });
 
   const messageIds = listResponse.data.messages || [];
@@ -96,10 +77,11 @@ export async function fetchEmails(
         throw new Error("Message ID missing in Gmail list response");
       }
 
-      const detail = await gmail.users.messages.get({
-        userId: "me",
-        id: msg.id,
-        format: "full",
+      const detail = await nango.get<GmailMessageResponse>({
+        providerConfigKey: PROVIDER_CONFIG_KEY,
+        connectionId,
+        endpoint: `/gmail/v1/users/me/messages/${msg.id}`,
+        params: { format: "full" },
       });
       return parseGmailMessage(detail.data);
     }),
@@ -139,7 +121,7 @@ export async function fetchEmails(
 /**
  * Parse Gmail API message into normalized format.
  */
-function parseGmailMessage(message: gmail_v1.Schema$Message): GmailMessage {
+function parseGmailMessage(message: GmailMessageResponse): GmailMessage {
   const headers = message.payload?.headers || [];
   const getHeader = (name: string): string =>
     headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ||
@@ -178,7 +160,7 @@ function parseEmailAddress(raw: string): { name: string; email: string } {
 /**
  * Extract plain text body from message payload.
  */
-function extractBody(payload?: gmail_v1.Schema$MessagePart): string {
+function extractBody(payload?: GmailPayload): string {
   if (!payload) return "";
 
   // Direct body
@@ -225,7 +207,7 @@ function stripHtml(html: string): string {
 /**
  * Check if message has attachments.
  */
-function hasAttachments(payload?: gmail_v1.Schema$MessagePart): boolean {
+function hasAttachments(payload?: GmailPayload): boolean {
   if (!payload) return false;
   if (payload.filename && payload.filename.length > 0) return true;
   if (payload.parts) {
@@ -242,13 +224,11 @@ export async function addLabels(
   messageId: string,
   labelIds: string[],
 ): Promise<void> {
-  const gmail = await getGmail(connectionId);
-  await gmail.users.messages.modify({
-    userId: "me",
-    id: messageId,
-    requestBody: {
-      addLabelIds: labelIds,
-    },
+  await nango.post({
+    providerConfigKey: PROVIDER_CONFIG_KEY,
+    connectionId,
+    endpoint: `/gmail/v1/users/me/messages/${messageId}/modify`,
+    data: { addLabelIds: labelIds },
   });
 }
 
@@ -260,13 +240,11 @@ export async function removeLabels(
   messageId: string,
   labelIds: string[],
 ): Promise<void> {
-  const gmail = await getGmail(connectionId);
-  await gmail.users.messages.modify({
-    userId: "me",
-    id: messageId,
-    requestBody: {
-      removeLabelIds: labelIds,
-    },
+  await nango.post({
+    providerConfigKey: PROVIDER_CONFIG_KEY,
+    connectionId,
+    endpoint: `/gmail/v1/users/me/messages/${messageId}/modify`,
+    data: { removeLabelIds: labelIds },
   });
 }
 
@@ -275,9 +253,12 @@ export async function removeLabels(
  */
 export async function getLabels(
   connectionId: string,
-): Promise<gmail_v1.Schema$Label[]> {
-  const gmail = await getGmail(connectionId);
-  const response = await gmail.users.labels.list({ userId: "me" });
+): Promise<GmailLabel[]> {
+  const response = await nango.get<{ labels?: GmailLabel[] }>({
+    providerConfigKey: PROVIDER_CONFIG_KEY,
+    connectionId,
+    endpoint: "/gmail/v1/users/me/labels",
+  });
   return response.data.labels || [];
 }
 
@@ -291,11 +272,12 @@ export async function getLabels(
 export async function createLabel(
   connectionId: string,
   labelName: string,
-): Promise<gmail_v1.Schema$Label> {
-  const gmail = await getGmail(connectionId);
-  const response = await gmail.users.labels.create({
-    userId: "me",
-    requestBody: {
+): Promise<GmailLabel> {
+  const response = await nango.post<GmailLabel>({
+    providerConfigKey: PROVIDER_CONFIG_KEY,
+    connectionId,
+    endpoint: "/gmail/v1/users/me/labels",
+    data: {
       name: labelName,
       labelListVisibility: "labelShow",
       messageListVisibility: "show",

@@ -1,8 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
+import pdfParse from 'pdf-parse';
 
 /**
  * Read a PDF file and extract its text content.

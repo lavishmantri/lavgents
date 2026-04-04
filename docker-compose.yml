@@ -1,7 +1,33 @@
-# Nango Self-Hosted Setup
-# Dashboard: http://localhost:3003
+# Lavgents Full Stack
+# App:       http://localhost:4111
+# Nango:     http://localhost:3003
 
 services:
+  # ─── Main Application ───────────────────────────────────────────────
+  app:
+    build: .
+    container_name: lavgents-app
+    depends_on:
+      nango-server:
+        condition: service_healthy
+    ports:
+      - "4111:4111"
+    env_file: .env
+    environment:
+      # Override Nango URLs to use internal Docker networking
+      NANGO_HOST: http://nango-server:8080
+      NANGO_SERVER_URL: http://nango-server:8080
+    volumes:
+      - ./data:/app/data
+      # Mount host directories for Obsidian vault and hiring folder (optional)
+      # Uncomment and adjust paths as needed:
+      # - ~/Obsidian:/obsidian
+      # - ~/zig/hiring:/hiring
+    restart: unless-stopped
+    networks:
+      - nango-network
+
+  # ─── Nango Infrastructure ───────────────────────────────────────────
   nango-db:
     image: postgres:17-alpine
     container_name: nango-db
