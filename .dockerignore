@@ -8,3 +8,5 @@ node_modules
 dist
 credentials/
 **/*.credentials.json
+tailscale/
+data/

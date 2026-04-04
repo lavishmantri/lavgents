@@ -1,6 +1,7 @@
 # Lavgents Full Stack
-# App:       http://localhost:4111
-# Nango:     http://localhost:3003
+# App:       http://localhost:4111  (exposed publicly via system Tailscale Funnel)
+# Nango:     http://localhost:3003  (local only)
+# Start:     ./start.sh
 
 services:
   # ─── Main Application ───────────────────────────────────────────────
@@ -42,12 +43,14 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     networks:
       - nango-network
 
   nango-redis:
     image: redis:7-alpine
     container_name: nango-redis
+    restart: unless-stopped
     networks:
       - nango-network
 
