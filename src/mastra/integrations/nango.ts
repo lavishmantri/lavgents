@@ -218,6 +218,81 @@ export async function listConnections(connectionId: string): Promise<
 }
 
 /**
+ * List ALL connections from Nango without filtering.
+ * Used for multi-connection support where each connection has a unique ID.
+ *
+ * @returns Array of all connection info objects
+ */
+export async function listAllConnections(): Promise<
+  Array<{
+    provider: string;
+    connectionId: string;
+    createdAt: string;
+  }>
+> {
+  const result = await getNangoClient().listConnections();
+
+  interface NangoConnection {
+    connection_id: string;
+    provider_config_key: string;
+    created_at: string;
+  }
+
+  return (result.connections as NangoConnection[]).map((conn) => ({
+    provider: conn.provider_config_key,
+    connectionId: conn.connection_id,
+    createdAt: conn.created_at,
+  }));
+}
+
+/**
+ * Connection metadata shape stored on Nango connections.
+ */
+export interface ConnectionMetadata {
+  displayName?: string;
+  autoName?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Store display name / auto-detected identity on a Nango connection.
+ * Uses PATCH (updateMetadata) to merge with any existing metadata.
+ *
+ * @param provider - The integration provider
+ * @param connectionId - The Nango connection ID
+ * @param metadata - Metadata to set
+ */
+export async function setConnectionMetadata(
+  provider: NangoProvider,
+  connectionId: string,
+  metadata: ConnectionMetadata,
+): Promise<void> {
+  await getNangoClient().updateMetadata(provider, connectionId, metadata);
+}
+
+/**
+ * Retrieve display name / identity metadata from a Nango connection.
+ *
+ * @param provider - The integration provider
+ * @param connectionId - The Nango connection ID
+ * @returns Metadata object or null if not set / on error
+ */
+export async function getConnectionMetadata(
+  provider: NangoProvider,
+  connectionId: string,
+): Promise<ConnectionMetadata | null> {
+  try {
+    const meta = await getNangoClient().getMetadata<ConnectionMetadata>(
+      provider,
+      connectionId,
+    );
+    return meta ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Delete a connection (revoke access).
  *
  * @param provider - The integration provider name

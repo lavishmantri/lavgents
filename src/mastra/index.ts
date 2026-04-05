@@ -24,7 +24,9 @@ import {
   connectionsPageHandler,
   listConnectionsHandler,
   createSessionHandler,
+  completeConnectionHandler,
   deleteConnectionHandler,
+  renameConnectionHandler,
 } from './webhooks/connections';
 import { CronScheduler } from './scheduler/scheduler.js';
 import { cronJobs } from './scheduler/jobs.js';
@@ -89,9 +91,17 @@ export const mastra = new Mastra({
         method: 'POST',
         handler: createSessionHandler,
       }),
+      registerApiRoute('/connections/complete', {
+        method: 'POST',
+        handler: completeConnectionHandler,
+      }),
       registerApiRoute('/connections/delete', {
         method: 'POST',
         handler: deleteConnectionHandler,
+      }),
+      registerApiRoute('/connections/rename', {
+        method: 'POST',
+        handler: renameConnectionHandler,
       }),
     ],
   },

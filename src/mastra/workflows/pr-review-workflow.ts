@@ -7,8 +7,8 @@ import {
   claudeReviewOutputSchema,
   postReviewOutputSchema,
 } from '../schemas/pr-review-schemas';
-import { listPullRequestFiles } from '../integrations/github';
-import { addIssueComment } from '../integrations/github';
+import { listPullRequestFiles, addIssueComment } from '../integrations/github';
+import { listAllConnections } from '../integrations/nango';
 
 const execFile = promisify(execFileCb);
 
@@ -23,8 +23,12 @@ const fetchDiff = createStep({
   execute: async ({ inputData }) => {
     if (!inputData) throw new Error('Input data required');
 
-    const connectionId = process.env.GITHUB_CONNECTION_ID;
-    if (!connectionId) throw new Error('GITHUB_CONNECTION_ID not configured');
+    let connectionId = process.env.GITHUB_CONNECTION_ID;
+    if (!connectionId) {
+      const allConns = await listAllConnections();
+      connectionId = allConns.find(c => c.provider === 'github')?.connectionId;
+    }
+    if (!connectionId) throw new Error('No GitHub connection found. Connect GitHub at /connections or set GITHUB_CONNECTION_ID.');
 
     const { owner, repo, pullNumber, prTitle, prBody, prAuthor } = inputData;
 
@@ -119,8 +123,12 @@ const postReviewComment = createStep({
   execute: async ({ inputData }) => {
     if (!inputData) throw new Error('Input data required');
 
-    const connectionId = process.env.GITHUB_CONNECTION_ID;
-    if (!connectionId) throw new Error('GITHUB_CONNECTION_ID not configured');
+    let connectionId = process.env.GITHUB_CONNECTION_ID;
+    if (!connectionId) {
+      const allConns = await listAllConnections();
+      connectionId = allConns.find(c => c.provider === 'github')?.connectionId;
+    }
+    if (!connectionId) throw new Error('No GitHub connection found. Connect GitHub at /connections or set GITHUB_CONNECTION_ID.');
 
     const { owner, repo, pullNumber, reviewBody } = inputData;
 
