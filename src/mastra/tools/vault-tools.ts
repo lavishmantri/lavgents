@@ -1,7 +1,7 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { resolve, join, relative } from 'node:path';
-import { readdir, stat, readFile, writeFile as fsWriteFile, mkdir, rename } from 'node:fs/promises';
+import { readdir, readFile, writeFile as fsWriteFile, mkdir, rename } from 'node:fs/promises';
 import { readMdFile, listMdFiles } from './read-utils';
 import { writeMdFile, updateMdFrontmatter } from './write-utils';
 import type { VaultConfig } from '../config/vaults';
@@ -196,6 +196,51 @@ export function createVaultTools(vault: VaultConfig) {
     },
   });
 
+  const updateAgentsMd = createTool({
+    id: `${vault.id}--update-agents-md`,
+    description: `Record a learning or rule into Agents.md for the ${vault.name} folder. Use requiresConfirmation=false for explicit user corrections; true for inferred patterns that need the user's approval first.`,
+    inputSchema: z.object({
+      section: z.string().describe('Section heading to add/update (e.g., "Learned Conventions", "User Preferences")'),
+      content: z.string().describe('The rule or learning to append under the section'),
+      requiresConfirmation: z.boolean().describe('If true, return a pending confirmation — do not save yet. If false, save immediately.'),
+    }),
+    outputSchema: z.object({
+      saved: z.boolean(),
+      pendingConfirmation: z.boolean(),
+      content: z.string(),
+    }),
+    execute: async ({ section, content, requiresConfirmation }) => {
+      if (requiresConfirmation) {
+        // Return the proposed learning for the orchestrator to relay to the user as a question
+        return { saved: false, pendingConfirmation: true, content: `[${vault.name}] Should I remember: "${content}" under "${section}"?` };
+      }
+
+      const agentsMdPath = join(root, 'Agents.md');
+      let existing = '';
+      try {
+        existing = await readFile(agentsMdPath, 'utf-8');
+      } catch {
+        // File doesn't exist yet — create it
+        existing = `# ${vault.name} Agent Rules\n`;
+      }
+
+      const sectionHeader = `## ${section}`;
+      let updated: string;
+      if (existing.includes(sectionHeader)) {
+        // Append under the existing section (before the next heading or EOF)
+        updated = existing.replace(
+          new RegExp(`(${sectionHeader}[\\s\\S]*?)(?=\\n## |$)`),
+          (match) => `${match.trimEnd()}\n- ${content}\n`,
+        );
+      } else {
+        updated = `${existing.trimEnd()}\n\n${sectionHeader}\n\n- ${content}\n`;
+      }
+
+      await fsWriteFile(agentsMdPath, updated, 'utf-8');
+      return { saved: true, pendingConfirmation: false, content };
+    },
+  });
+
   return {
     [`${vault.id}ReadNote`]: readNote,
     [`${vault.id}WriteNote`]: writeNote,
@@ -206,5 +251,6 @@ export function createVaultTools(vault: VaultConfig) {
     [`${vault.id}ListFolders`]: listFolders,
     [`${vault.id}ReadFile`]: readAnyFile,
     [`${vault.id}WriteFile`]: writeAnyFile,
+    [`${vault.id}UpdateAgentsMd`]: updateAgentsMd,
   };
 }

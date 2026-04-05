@@ -4,22 +4,22 @@ import { getModelConfig } from '../config/model';
 import { discoverVaults, readParentAgentsMd } from '../config/vaults';
 import { createFolderAgent } from './folder-agent';
 import { createDispatchTool } from '../tools/dispatch-tools';
-import { sendReplyTool, sendKeyboardTool } from '../tools/telegram-tools';
 import { dateTool } from '../tools/date-tool';
 import { webSearchTool } from '../tools/web-search';
 import { weatherTool } from '../tools/weather-tool';
 
-export interface TelegramAgentBundle {
-  telegramAgent: Agent;
+export interface BrainBundle {
+  brainiac: Agent;
   folderAgents: Agent[];
 }
 
 /**
- * Build the main Telegram listener agent and all folder agents.
+ * Build the Brainiac second-brain orchestrator and all folder agents.
  * Discovers vaults from NOTES_ROOT, creates a folder agent per vault,
  * and wires dispatch tools into the main agent.
+ * The brain is channel-agnostic — it knows nothing about Telegram, Slack, etc.
  */
-export async function buildTelegramAgent(): Promise<TelegramAgentBundle> {
+export async function buildBrain(): Promise<BrainBundle> {
   const vaults = await discoverVaults();
   const parentRules = await readParentAgentsMd();
 
@@ -40,7 +40,8 @@ export async function buildTelegramAgent(): Promise<TelegramAgentBundle> {
     })
     .join('\n');
 
-  const instructions = `You are a personal AI assistant accessible via Telegram.
+  const instructions = `You are Brainiac, a personal second brain assistant.
+You help manage knowledge, notes, tasks, and information across different areas of life.
 You are smart, conversational, and action-oriented.
 
 ${parentRules ? `## Global Rules\n\n${parentRules}\n` : ''}
@@ -48,26 +49,24 @@ ${parentRules ? `## Global Rules\n\n${parentRules}\n` : ''}
 
 You can delegate tasks to specialized folder agents. Each agent deeply understands its folder's contents and conventions.
 
-${vaultList || 'No folder agents discovered. Create Agents.md files in subdirectories of the notes root to enable them.'}
+${vaultList || 'No folder agents discovered yet. Drop an Agents.md file into any subfolder of the notes root to activate it.'}
 
 ## How You Work
 
-1. **Smart delegation**: When a message relates to a specific folder's domain (workout, finance, journal, etc.), delegate to that folder's agent using the appropriate dispatch tool. The folder agent will handle all file operations.
+1. **Smart delegation**: When a message relates to a specific folder's domain (workouts, finance, travel, journal, etc.), delegate to that folder's agent using the appropriate dispatch tool. The folder agent handles all file operations.
 2. **Handle general tasks yourself**: For weather, general questions, web searches, date/time, or anything that doesn't belong to a specific folder — handle it directly with your own tools.
-3. **Always reply**: After processing (whether you handled it or delegated), use the send-telegram-reply tool to respond to the user with a concise summary of what was done.
-4. **Conversational**: You remember prior messages in a conversation. Use context from earlier messages when relevant.
+3. **Relay follow-up questions**: If a dispatch tool returns needsFollowUp=true, relay the folder agent's question to the user verbatim. When the user responds, dispatch to the same folder agent again with the answer as context.
+4. **Conversational memory**: You remember prior messages in a conversation. Use context from earlier messages when relevant.
 5. **Ask when unsure**: If a message could go to multiple folders or you're not sure where it belongs, ask the user.
-6. **Be concise**: Telegram messages should be brief and to the point. Use markdown formatting sparingly.`;
+6. **Be concise**: Keep responses short and to the point. Use markdown formatting when it helps readability.`;
 
-  const telegramAgent = new Agent({
-    id: 'telegram-listener-agent',
-    name: 'Telegram Listener Agent',
+  const brainiac = new Agent({
+    id: 'brainiac',
+    name: 'Second Brain Assistant',
     model: getModelConfig(),
     instructions,
     tools: {
       ...dispatchTools,
-      sendReply: sendReplyTool,
-      sendKeyboard: sendKeyboardTool,
       dateTool,
       webSearchTool,
       weatherTool,
@@ -75,5 +74,5 @@ ${vaultList || 'No folder agents discovered. Create Agents.md files in subdirect
     memory: new Memory(),
   });
 
-  return { telegramAgent, folderAgents };
+  return { brainiac, folderAgents };
 }

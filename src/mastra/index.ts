@@ -19,7 +19,8 @@ import { prReviewWorkflow } from './workflows/pr-review-workflow';
 import { hiringScreeningAgent } from './agents/hiring-screening-agent';
 import { hiringInterviewPrepAgent } from './agents/hiring-interview-prep-agent';
 import { registerApiRoute } from '@mastra/core/server';
-import { telegramWebhookHandler, githubWebhookHandler } from './webhooks/handlers';
+import { githubWebhookHandler } from './webhooks/handlers';
+import { telegramWebhookHandler } from './channels/telegram';
 import {
   connectionsPageHandler,
   listConnectionsHandler,
@@ -30,10 +31,11 @@ import {
 } from './webhooks/connections';
 import { CronScheduler } from './scheduler/scheduler.js';
 import { cronJobs } from './scheduler/jobs.js';
-import { buildTelegramAgent } from './agents/telegram-agent';
+import { cronsPageHandler, listCronsHandler, toggleCronHandler } from './webhooks/crons.js';
+import { buildBrain } from './agents/brain';
 
-// Build the Telegram agent system (discovers vaults, creates folder agents)
-const { telegramAgent, folderAgents } = await buildTelegramAgent();
+// Build the Brainiac second-brain agent system (discovers vaults, creates folder agents)
+const { brainiac, folderAgents } = await buildBrain();
 
 // Collect all folder agents into a keyed object for Mastra registration
 const folderAgentMap = Object.fromEntries(
@@ -58,7 +60,7 @@ export const mastra = new Mastra({
     voiceNoteAgent,
     hiringScreeningAgent,
     hiringInterviewPrepAgent,
-    telegramAgent,
+    "brainiac": brainiac,
     ...folderAgentMap,
   },
   scorers: { toolCallAppropriatenessScorer, completenessScorer, translationScorer },
@@ -77,6 +79,8 @@ export const mastra = new Mastra({
     middleware: [
       { path: '/connections', handler: connectionsPageHandler },
       { path: '/connections/list', handler: listConnectionsHandler },
+      { path: '/crons', handler: cronsPageHandler },
+      { path: '/crons/list', handler: listCronsHandler },
     ],
     apiRoutes: [
       registerApiRoute('/webhooks/telegram', {
@@ -102,6 +106,10 @@ export const mastra = new Mastra({
       registerApiRoute('/connections/rename', {
         method: 'POST',
         handler: renameConnectionHandler,
+      }),
+      registerApiRoute('/crons/toggle', {
+        method: 'POST',
+        handler: toggleCronHandler,
       }),
     ],
   },

@@ -1,5 +1,4 @@
 import { createStep, createWorkflow } from '@mastra/core/workflows';
-import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   noteRouterInputSchema,
@@ -11,7 +10,7 @@ import {
 import { readMdFile } from '../tools/read-utils';
 import { updateMdFrontmatter, moveMdFile } from '../tools/write-utils';
 import { sendMessageWithKeyboard } from '../integrations/telegram';
-import { parseVaultIndex } from './voice-note-workflow';
+import { getDiscoveredVaults } from '../config/vaults';
 import { NOTES_ROOT } from '../config/paths';
 
 // Step 1: Classify the note using the LLM agent
@@ -32,16 +31,18 @@ const classifyNote = createStep({
     // Mark as processing
     await updateMdFrontmatter(filePath, { status: 'processing' });
 
-    // Read vault index for classification context
-    const indexPath = join(NOTES_ROOT, 'vault-index.md');
-    const vaultIndex = await readFile(indexPath, 'utf-8');
-    const folders = parseVaultIndex(vaultIndex);
+    // Get discovered vaults for classification context
+    const vaults = await getDiscoveredVaults();
+    const vaultContext = vaults.map(v => {
+      const desc = v.rules.split('\n').find(l => l.trim() && !l.startsWith('#'))?.trim() || v.name;
+      return `- **${v.name}** (id: ${v.id}): ${desc}`;
+    }).join('\n');
 
     // Ask the agent to classify
     const agent = mastra?.getAgent('voiceNoteAgent');
     if (!agent) throw new Error('Voice note agent not found');
 
-    const prompt = `Given the following vault organization:\n\n${vaultIndex}\n\nClassify this note and return JSON with "targetFolder" (the Path value from vault-index) and "content" (a clean version of the note):\n\n${body}`;
+    const prompt = `Given these available folders:\n\n${vaultContext}\n\nClassify this note and return JSON with "targetFolder" (the folder id) and "content" (a clean version of the note):\n\n${body}`;
 
     const response = await agent.generate([{ role: 'user', content: prompt }]);
     const text = response.text || '';
@@ -51,9 +52,9 @@ const classifyNote = createStep({
     const parsed = JSON.parse(jsonMatch[0]);
     const targetFolder = parsed.targetFolder || 'inbox';
 
-    const matched = folders.find(f => f.id === targetFolder || f.vaultPath === targetFolder);
-    const fallback = folders.find(f => f.id === 'inbox') || { id: 'inbox', name: 'Inbox', vaultPath: 'inbox' };
-    const folder = matched || fallback;
+    const matched = vaults.find(v => v.id === targetFolder);
+    const fallback = vaults.find(v => v.id === 'inbox') ?? { id: 'inbox', name: 'Inbox', path: join(NOTES_ROOT, 'inbox') };
+    const folder = matched ?? fallback;
 
     return {
       filePath,
@@ -61,7 +62,7 @@ const classifyNote = createStep({
       noteBody: body,
       suggestedFolderId: folder.id,
       suggestedFolderName: folder.name,
-      suggestedFolderPath: folder.vaultPath,
+      suggestedFolderPath: folder.path,
     };
   },
 });
@@ -80,16 +81,14 @@ const awaitConfirmation = createStep({
     // If resumed, update classification if user chose a different folder
     if (resumeData) {
       if (resumeData.selectedFolderId && resumeData.selectedFolderId !== inputData.suggestedFolderId) {
-        const indexPath = join(NOTES_ROOT, 'vault-index.md');
-        const raw = await readFile(indexPath, 'utf-8');
-        const folders = parseVaultIndex(raw);
-        const picked = folders.find(f => f.id === resumeData.selectedFolderId);
+        const vaults = await getDiscoveredVaults();
+        const picked = vaults.find(v => v.id === resumeData.selectedFolderId);
         if (picked) {
           return {
             ...inputData,
             suggestedFolderId: picked.id,
             suggestedFolderName: picked.name,
-            suggestedFolderPath: picked.vaultPath,
+            suggestedFolderPath: picked.path,
           };
         }
       }

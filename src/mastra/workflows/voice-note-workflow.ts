@@ -12,6 +12,7 @@ import {
 import { writeMdFile } from '../tools/write-utils';
 import { transcribeAudioBuffer } from '../tools/transcribe';
 import { NOTES_ROOT } from '../config/paths';
+import { getDiscoveredVaults } from '../config/vaults';
 
 // Step 1: Check if transcription is already provided or exists as sidecar .txt
 const resolveTranscription = createStep({
@@ -104,42 +105,24 @@ const parseVoiceCommand = createStep({
   },
 });
 
-/**
- * Parse vault-index.md into a list of folder entries.
- * Each H2 section becomes a folder with id, name, path, and purpose.
- */
-export function parseVaultIndex(markdown: string): { id: string; name: string; vaultPath: string }[] {
-  const sections = markdown.split(/^## /m).slice(1);
-  return sections.map(section => {
-    const lines = section.trim().split('\n');
-    const name = lines[0].replace(/\s*\(default\)\s*/i, '').trim();
-    const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-$/, '');
-    const pathMatch = section.match(/\*\*Path\*\*:\s*(.+)/);
-    const vaultPath = pathMatch ? pathMatch[1].trim() : id;
-    return { id, name, vaultPath };
-  });
-}
-
-// Step 4: Resolve target folder from vault-index.md
+// Step 4: Resolve target folder from discovered vaults (Agents.md system)
 const resolveFolder = createStep({
   id: 'resolve-folder',
-  description: 'Reads vault-index.md and resolves target folder path',
+  description: 'Resolves target folder path from discovered vaults',
   inputSchema: parseVoiceCommandOutputSchema,
   outputSchema: resolveFolderOutputSchema,
   execute: async ({ inputData }) => {
     if (!inputData) throw new Error('Input data required');
 
-    const indexPath = join(NOTES_ROOT, 'vault-index.md');
-    const raw = await readFile(indexPath, 'utf-8');
-    const folders = parseVaultIndex(raw);
+    const vaults = await getDiscoveredVaults();
 
-    const matched = folders.find(f => f.id === inputData.targetFolder || f.vaultPath === inputData.targetFolder);
-    const fallback = folders.find(f => f.id === 'inbox') || { id: 'inbox', name: 'Inbox', vaultPath: 'inbox' };
-    const folder = matched || fallback;
+    const matched = vaults.find(v => v.id === inputData.targetFolder);
+    const fallback = vaults.find(v => v.id === 'inbox') ?? { id: 'inbox', name: 'Inbox', path: join(NOTES_ROOT, 'inbox') };
+    const folder = matched ?? fallback;
 
     return {
       ...inputData,
-      folderPath: join(NOTES_ROOT, folder.vaultPath),
+      folderPath: folder.path,
       folderId: folder.id,
       folderName: folder.name,
     };

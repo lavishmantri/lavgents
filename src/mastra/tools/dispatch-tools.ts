@@ -34,11 +34,20 @@ export function createDispatchTool(vault: VaultConfig, folderAgent: Agent) {
     }),
     outputSchema: z.object({
       response: z.string(),
+      needsFollowUp: z.boolean().describe('True if the folder agent is asking a clarifying question rather than completing a task'),
     }),
     execute: async ({ message, context }) => {
       const prompt = context ? `Context: ${context}\n\nTask: ${message}` : message;
       const result = await folderAgent.generate([{ role: 'user', content: prompt }]);
-      return { response: result.text };
+      const text = result.text ?? '';
+
+      // The folder agent is asking a follow-up question if its response ends with '?'
+      // and it did not perform any file write operations (which would indicate task completion)
+      const hasWrites = (result.toolResults as unknown as Array<{ toolName: string }> | undefined)
+        ?.some(t => t.toolName.includes('WriteNote') || t.toolName.includes('WriteFile') || t.toolName.includes('MoveNote'));
+      const needsFollowUp = text.trimEnd().endsWith('?') && !hasWrites;
+
+      return { response: text, needsFollowUp: needsFollowUp ?? false };
     },
   });
 }

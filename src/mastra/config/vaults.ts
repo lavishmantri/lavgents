@@ -56,3 +56,28 @@ export async function discoverVaults(): Promise<VaultConfig[]> {
 export async function readParentAgentsMd(): Promise<string> {
   return readAgentsMd(NOTES_ROOT);
 }
+
+// ---------------------------------------------------------------------------
+// Cached vault accessor (replaces parseVaultIndex / vault-index.md system)
+// ---------------------------------------------------------------------------
+
+let cachedVaults: VaultConfig[] | null = null;
+
+/**
+ * Return discovered vaults, using a cache to avoid repeated filesystem scans.
+ * The cache is populated on first call and reused for the lifetime of the process.
+ * Call invalidateVaultCache() if new Agents.md files are added at runtime.
+ */
+export async function getDiscoveredVaults(): Promise<VaultConfig[]> {
+  if (!cachedVaults) {
+    cachedVaults = await discoverVaults();
+  }
+  return cachedVaults;
+}
+
+/**
+ * Clear the vault cache so the next call to getDiscoveredVaults() re-scans the filesystem.
+ */
+export function invalidateVaultCache(): void {
+  cachedVaults = null;
+}
