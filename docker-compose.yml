@@ -15,14 +15,14 @@ services:
       - "4111:4111"
     env_file: .env
     environment:
-      # Override Nango URLs to use internal Docker networking
-      NANGO_HOST: http://nango-server:8080
-      NANGO_SERVER_URL: http://nango-server:8080
+      # Internal Docker hostname for server-to-server Nango API calls
+      NANGO_HOST: http://nango-server:3003
+      # Public URL for browser-facing Nango Connect UI
+      NANGO_SERVER_URL: http://localhost:3003
+      NOTES_ROOT: /obsidian
     volumes:
       - ./data:/app/data
-      # Mount host directories for Obsidian vault and hiring folder (optional)
-      # Uncomment and adjust paths as needed:
-      # - ~/Obsidian:/obsidian
+      - ~/Obsidian:/obsidian
       # - ~/zig/hiring:/hiring
     restart: unless-stopped
     networks:
@@ -50,6 +50,11 @@ services:
   nango-redis:
     image: redis:7-alpine
     container_name: nango-redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
     networks:
       - nango-network
@@ -61,33 +66,35 @@ services:
     depends_on:
       nango-db:
         condition: service_healthy
-      nango-redis:
-        condition: service_started
     ports:
-      - "3003:8080"
-      - "3009:3009"
+      - "${SERVER_PORT:-3003}:${SERVER_PORT:-3003}"
+      - "${CONNECT_UI_PORT:-3009}:${CONNECT_UI_PORT:-3009}"
     environment:
-      NODE_ENV: development
-      NANGO_DATABASE_URL: postgres://nango:${NANGO_DB_PASSWORD:-nango}@nango-db:5432/nango
-      NANGO_REDIS_URL: redis://nango-redis:6379
-      NANGO_SERVER_URL: ${NANGO_SERVER_URL:-http://localhost:3003}
-      NANGO_SECRET_KEY: ${NANGO_SECRET_KEY:-b4875cd4-0f60-4ba6-aff1-6362bdb021b8}
-      NANGO_PUBLIC_KEY: ${NANGO_PUBLIC_KEY:-19b92ee7-9bf9-4e5b-974d-d02405269d75}
+      SERVER_PORT: ${SERVER_PORT:-3003}
+      NANGO_DB_USER: nango
+      NANGO_DB_PASSWORD: ${NANGO_DB_PASSWORD:-nango}
+      NANGO_DB_HOST: nango-db
+      NANGO_DB_NAME: nango
+      RECORDS_DATABASE_URL: postgresql://nango:${NANGO_DB_PASSWORD:-nango}@nango-db:5432/nango
       NANGO_ENCRYPTION_KEY: ${NANGO_ENCRYPTION_KEY:-E3r2AOp5uirYMTRJlw3NTe0HCE1WYnyBpjBjQc7tZ1Y=}
+      NANGO_SERVER_URL: ${NANGO_SERVER_URL:-http://localhost:3003}
       NANGO_CALLBACK_URL: ${NANGO_CALLBACK_URL:-http://localhost:3003/oauth/callback}
-      NANGO_TELEMETRY: false
-      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      # Note: hosted image auto-generates keys in DB; use the generated
+      # dev secret key in .env NANGO_SECRET_KEY for the app to authenticate
+      NANGO_REDIS_URL: redis://nango-redis:6379
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      CSP_REPORT_ONLY: "true"
       FLAG_AUTH_ENABLED: "false"
       FLAG_SERVE_CONNECT_UI: "true"
       NANGO_PUBLIC_CONNECT_URL: ${NANGO_PUBLIC_CONNECT_URL:-http://localhost:3009}
       NANGO_CONNECT_SESSION_TOKEN_SECRET: "connect-session-secret-for-local-dev"
-      NANGO_DASHBOARD_USERNAME: "admin"
-      NANGO_DASHBOARD_PASSWORD: "admin"
+      NANGO_LOGS_ENABLED: "false"
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3003/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
     restart: always
     networks:
       - nango-network

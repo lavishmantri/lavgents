@@ -1,9 +1,13 @@
 import { Nango } from "@nangohq/node";
 
+// Internal host for server-to-server calls (may be Docker hostname like nango-server)
 const nangoHost =
   process.env.NANGO_HOST ||
   process.env.NANGO_SERVER_URL ||
   "http://localhost:3003";
+// Public URL reachable from the browser (never a Docker-internal hostname)
+const nangoPublicUrl =
+  process.env.NANGO_SERVER_URL || "http://localhost:3003";
 const nangoSecretKey = process.env.NANGO_SECRET_KEY || "";
 
 let nangoClient: Nango | null = null;
@@ -14,6 +18,7 @@ let nangoClient: Nango | null = null;
  */
 export type NangoProvider =
   | "google-mail"
+  | "google-calendar"
   | "github"
   | "slack"
   | "notion"
@@ -127,18 +132,34 @@ export async function getToken(
  * @returns Object with connect URL and session token
  */
 export async function createConnectSession(
-  provider: NangoProvider,
+  provider: NangoProvider | NangoProvider[] | undefined,
   userId: string,
 ): Promise<{ url: string; token: string; expiresAt: string }> {
+  const allowed = provider
+    ? Array.isArray(provider)
+      ? provider
+      : [provider]
+    : undefined;
+
   const result = await getNangoClient().createConnectSession({
     end_user: { id: userId },
-    allowed_integrations: [provider],
+    ...(allowed && { allowed_integrations: allowed }),
   });
 
+  // SDK returns raw API shape: { data: { token, connect_link, expires_at } }
+  const data = result.data as Record<string, string>;
+  let connectUrl = data.connect_link || data.connectUrl || "";
+
+  // Append apiURL so the Connect UI talks to our local Nango server, not Nango Cloud
+  if (connectUrl && !connectUrl.includes("apiURL=")) {
+    const sep = connectUrl.includes("?") ? "&" : "?";
+    connectUrl += `${sep}apiURL=${encodeURIComponent(nangoPublicUrl)}`;
+  }
+
   return {
-    url: result.data.connectUrl,
-    token: result.data.token,
-    expiresAt: result.data.expiresAt,
+    url: connectUrl,
+    token: data.token,
+    expiresAt: data.expires_at || data.expiresAt || "",
   };
 }
 

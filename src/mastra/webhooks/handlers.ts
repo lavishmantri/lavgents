@@ -7,8 +7,12 @@ import {
   answerCallbackQuery,
   editMessageText,
   sendMessageWithKeyboard,
+  getFile,
+  downloadFile,
+  sendMessage,
 } from "../integrations/telegram";
 import { parseVaultIndex } from "../workflows/voice-note-workflow";
+import { transcribeAudioBuffer } from "../tools/transcribe";
 import { NOTES_ROOT } from "../config/paths";
 
 /**
@@ -442,7 +446,22 @@ function extractTelegramInput(
 }
 
 /**
- * Process a verified Telegram webhook event by running the note workflow.
+ * Map mime type to file extension for audio files.
+ */
+function audioExtension(mimeType?: string): string {
+  if (!mimeType) return "ogg";
+  const map: Record<string, string> = {
+    "audio/ogg": "ogg",
+    "audio/mpeg": "mp3",
+    "audio/mp4": "m4a",
+    "audio/wav": "wav",
+  };
+  return map[mimeType] || "ogg";
+}
+
+/**
+ * Process a verified Telegram webhook event through the Telegram listener agent.
+ * Transcribes voice/audio before passing to the agent.
  */
 export async function handleTelegramMessage(
   event: TelegramWebhookEvent,
@@ -458,12 +477,58 @@ export async function handleTelegramMessage(
     `[Telegram Webhook] Processing ${input.messageType} from ${input.senderName}`,
   );
 
-  const workflow = mastra.getWorkflow("telegramNoteWorkflow");
-  const run = await workflow.createRun();
-  const result = await run.start({ inputData: input });
+  // Resolve message text — transcribe audio if needed
+  let messageText = input.text || "";
 
-  if (result.status === "failed") {
-    console.error("[Telegram Webhook] Workflow failed:", result);
+  if (
+    (input.messageType === "voice" || input.messageType === "audio") &&
+    input.fileId
+  ) {
+    try {
+      const fileInfo = await getFile(input.fileId);
+      if (fileInfo.file_path) {
+        const buffer = await downloadFile(fileInfo.file_path);
+        const ext = audioExtension(input.mimeType);
+        const fileName = `voice.${ext}`;
+        messageText = await transcribeAudioBuffer(buffer, fileName);
+      }
+    } catch (err) {
+      console.error("[Telegram Webhook] Transcription failed:", err);
+      try {
+        await sendMessage(
+          input.chatId,
+          "Sorry, I couldn't process that audio. Please try again or send text.",
+        );
+      } catch {
+        // notification failure is non-fatal
+      }
+      return;
+    }
+  }
+
+  if (!messageText.trim()) {
+    console.log("[Telegram Webhook] Empty message, ignoring");
+    return;
+  }
+
+  // Route through the Telegram listener agent
+  const agent = mastra.getAgent("telegram-listener-agent");
+  const prompt = `[chatId=${input.chatId}, sender=${input.senderName}, type=${input.messageType}]\n\n${messageText}`;
+
+  try {
+    await agent.generate([{ role: "user", content: prompt }], {
+      memory: {
+        thread: String(input.chatId),
+        resource: String(input.chatId),
+      },
+    });
+  } catch (err) {
+    console.error("[Telegram Webhook] Agent failed:", err);
+    try {
+      await sendMessage(input.chatId, "Something went wrong. Please try again.");
+    } catch {
+      // notification failure is non-fatal
+    }
   }
 }
 

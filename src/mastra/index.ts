@@ -20,8 +20,23 @@ import { hiringScreeningAgent } from './agents/hiring-screening-agent';
 import { hiringInterviewPrepAgent } from './agents/hiring-interview-prep-agent';
 import { registerApiRoute } from '@mastra/core/server';
 import { telegramWebhookHandler, githubWebhookHandler } from './webhooks/handlers';
+import {
+  connectionsPageHandler,
+  listConnectionsHandler,
+  createSessionHandler,
+  deleteConnectionHandler,
+} from './webhooks/connections';
 import { CronScheduler } from './scheduler/scheduler.js';
 import { cronJobs } from './scheduler/jobs.js';
+import { buildTelegramAgent } from './agents/telegram-agent';
+
+// Build the Telegram agent system (discovers vaults, creates folder agents)
+const { telegramAgent, folderAgents } = await buildTelegramAgent();
+
+// Collect all folder agents into a keyed object for Mastra registration
+const folderAgentMap = Object.fromEntries(
+  folderAgents.map(a => [a.id ?? a.name, a]),
+);
 
 export const mastra = new Mastra({
   workflows: {
@@ -35,7 +50,15 @@ export const mastra = new Mastra({
     hiringPipelineWorkflow,
     prReviewWorkflow,
   },
-  agents: { weatherAgent, emailClassifierAgent, voiceNoteAgent, hiringScreeningAgent, hiringInterviewPrepAgent },
+  agents: {
+    weatherAgent,
+    emailClassifierAgent,
+    voiceNoteAgent,
+    hiringScreeningAgent,
+    hiringInterviewPrepAgent,
+    telegramAgent,
+    ...folderAgentMap,
+  },
   scorers: { toolCallAppropriatenessScorer, completenessScorer, translationScorer },
   bundler: {
     sourcemap: true,
@@ -49,6 +72,10 @@ export const mastra = new Mastra({
     level: 'info',
   }),
   server: {
+    middleware: [
+      { path: '/connections', handler: connectionsPageHandler },
+      { path: '/connections/list', handler: listConnectionsHandler },
+    ],
     apiRoutes: [
       registerApiRoute('/webhooks/telegram', {
         method: 'POST',
@@ -57,6 +84,14 @@ export const mastra = new Mastra({
       registerApiRoute('/webhooks/github', {
         method: 'POST',
         handler: githubWebhookHandler,
+      }),
+      registerApiRoute('/connections/session', {
+        method: 'POST',
+        handler: createSessionHandler,
+      }),
+      registerApiRoute('/connections/delete', {
+        method: 'POST',
+        handler: deleteConnectionHandler,
       }),
     ],
   },
