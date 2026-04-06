@@ -200,6 +200,7 @@ export async function handleTelegramMessage(
   }
 
   // Route through the Brainiac agent (channel-agnostic)
+  // Include channel metadata in the prompt so the saveNote tool can capture it
   const agent = mastra.getAgent('brainiac');
   const prompt = `[sender=${input.senderName}, type=${input.messageType}]\n\n${messageText}`;
 

@@ -7,6 +7,7 @@ import { createDispatchTool } from '../tools/dispatch-tools';
 import { dateTool } from '../tools/date-tool';
 import { webSearchTool } from '../tools/web-search';
 import { weatherTool } from '../tools/weather-tool';
+import { saveNoteTool } from '../tools/save-note';
 
 export interface BrainBundle {
   brainiac: Agent;
@@ -53,12 +54,13 @@ ${vaultList || 'No folder agents discovered yet. Drop an Agents.md file into any
 
 ## How You Work
 
-1. **Smart delegation**: When a message relates to a specific folder's domain (workouts, finance, travel, journal, etc.), delegate to that folder's agent using the appropriate dispatch tool. The folder agent handles all file operations.
-2. **Handle general tasks yourself**: For weather, general questions, web searches, date/time, or anything that doesn't belong to a specific folder — handle it directly with your own tools.
-3. **Relay follow-up questions**: If a dispatch tool returns needsFollowUp=true, relay the folder agent's question to the user verbatim. When the user responds, dispatch to the same folder agent again with the answer as context.
-4. **Conversational memory**: You remember prior messages in a conversation. Use context from earlier messages when relevant.
-5. **Ask when unsure**: If a message could go to multiple folders or you're not sure where it belongs, ask the user.
-6. **Be concise**: Keep responses short and to the point. Use markdown formatting when it helps readability.`;
+1. **Save substantive input first**: For any message that contains information worth keeping (workout logs, meals, ideas, tasks, goals, notes), call the save-note tool first to persist a raw copy. Skip this for ephemeral queries (weather, date, quick questions).
+2. **Smart delegation**: When a message relates to a specific folder's domain (workouts, finance, travel, journal, etc.), delegate to that folder's agent using the appropriate dispatch tool. The folder agent handles all file operations including structuring and organizing the information.
+3. **Handle general tasks yourself**: For weather, general questions, web searches, date/time, or anything that doesn't belong to a specific folder — handle it directly with your own tools.
+4. **Relay follow-up questions**: If a dispatch tool returns needsFollowUp=true, relay the folder agent's question to the user verbatim. When the user responds, dispatch to the same folder agent again with the answer as context.
+5. **Conversational memory**: You remember prior messages in a conversation. Use context from earlier messages when relevant.
+6. **Ask when unsure**: If a message could go to multiple folders or you're not sure where it belongs, ask the user.
+7. **Be concise**: Keep responses short and to the point. Use markdown formatting when it helps readability.`;
 
   const brainiac = new Agent({
     id: 'brainiac',
@@ -67,6 +69,7 @@ ${vaultList || 'No folder agents discovered yet. Drop an Agents.md file into any
     instructions,
     tools: {
       ...dispatchTools,
+      saveNote: saveNoteTool,
       dateTool,
       webSearchTool,
       weatherTool,

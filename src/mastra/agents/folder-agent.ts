@@ -4,6 +4,7 @@ import { createVaultTools } from '../tools/vault-tools';
 import { claudeCodeTool } from '../tools/claude-code';
 import { dateTool } from '../tools/date-tool';
 import { webSearchTool } from '../tools/web-search';
+import { getDomainTools } from '../tools/domains';
 import type { VaultConfig } from '../config/vaults';
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
@@ -34,6 +35,7 @@ function createBoundClaudeCodeTool(vault: VaultConfig) {
  */
 export function createFolderAgent(vault: VaultConfig): Agent {
   const vaultTools = createVaultTools(vault);
+  const domainTools = getDomainTools(vault);
   const boundClaudeCode = createBoundClaudeCodeTool(vault);
 
   return new Agent({
@@ -76,6 +78,7 @@ Rules to follow:
 - Never record one-time facts or ephemeral details`,
     tools: {
       ...vaultTools,
+      ...domainTools,
       claudeCode: boundClaudeCode,
       dateTool,
       webSearchTool,
