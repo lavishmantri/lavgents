@@ -52,6 +52,20 @@ export class CronStore {
     return result.rows as unknown as CronJobRow[];
   }
 
+  async getAllJobs(): Promise<CronJobRow[]> {
+    const result = await this.db.execute(
+      'SELECT * FROM cron_jobs ORDER BY enabled DESC, job_id ASC'
+    );
+    return result.rows as unknown as CronJobRow[];
+  }
+
+  async setEnabled(jobId: string, enabled: boolean): Promise<void> {
+    await this.db.execute({
+      sql: `UPDATE cron_jobs SET enabled = ?, updated_at = datetime('now') WHERE job_id = ?`,
+      args: [enabled ? 1 : 0, jobId],
+    });
+  }
+
   async updateLastRun(jobId: string, timestamp: Date): Promise<void> {
     await this.db.execute({
       sql: `

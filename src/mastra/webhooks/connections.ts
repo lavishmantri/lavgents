@@ -353,6 +353,16 @@ function buildConnectionsPage(connectUrl: string): string {
     button.disconnect:hover { background: #1a0505; border-color: #7f1d1d; }
     button:disabled { opacity: 0.4; cursor: not-allowed; }
 
+    /* Nav */
+    nav { display: flex; gap: 0.25rem; margin-bottom: 2rem; }
+    nav a {
+      padding: 0.4rem 0.9rem; border-radius: 6px;
+      text-decoration: none; font-size: 0.85rem; font-weight: 500;
+      color: #888; transition: all 0.15s;
+    }
+    nav a:hover { color: #e5e5e5; background: #1a1a1a; }
+    nav a.active { color: #e5e5e5; background: #1a1a1a; border: 1px solid #333; }
+
     .loading { text-align: center; padding: 3rem; color: #666; }
     .error { color: #ef4444; padding: 1rem; text-align: center; }
     .copied-toast {
@@ -366,6 +376,10 @@ function buildConnectionsPage(connectUrl: string): string {
 </head>
 <body>
   <div class="container">
+    <nav>
+      <a href="/connections" class="active">Connections</a>
+      <a href="/crons">Cron Jobs</a>
+    </nav>
     <h1>Connections</h1>
     <p class="subtitle">Connect services to give your agents more capabilities. Multiple accounts per service are supported.</p>
     <div id="list"><div class="loading">Loading...</div></div>
