@@ -41,6 +41,8 @@ services:
       - app
     ports:
       - "4112:4112"
+    environment:
+      HOSTNAME: "0.0.0.0"
     restart: unless-stopped
     networks:
       - nango-network
