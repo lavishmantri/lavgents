@@ -5,10 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "mastra dev & mastra studio --port 4112 --server-port 4111; wait",
-    "dev:api": "mastra dev",
-    "dev:studio": "mastra studio --port 4112 --server-port 4111",
-    "build": "mastra build",
+    "dev": "mastra dev",
+    "build": "mastra build --studio",
     "start": "mastra start"
   },
   "keywords": [],
@@ -19,12 +17,12 @@
     "node": ">=22.13.0"
   },
   "dependencies": {
-    "@mastra/core": "^1.0.4",
-    "@mastra/evals": "^1.0.0",
-    "@mastra/libsql": "^1.0.0",
-    "@mastra/loggers": "^1.0.0",
-    "@mastra/memory": "^1.0.0",
-    "@mastra/observability": "^1.0.0",
+    "@mastra/core": "^1.24.1",
+    "@mastra/evals": "^1.2.1",
+    "@mastra/libsql": "^1.8.0",
+    "@mastra/loggers": "^1.1.1",
+    "@mastra/memory": "^1.15.0",
+    "@mastra/observability": "^1.9.0",
     "@nangohq/node": "^0.46.0",
     "@notionhq/client": "^2.3.0",
     "@octokit/rest": "^21.0.0",
@@ -37,7 +35,7 @@
   "devDependencies": {
     "@types/node": "^25.0.10",
     "@types/pdf-parse": "^1.1.4",
-    "mastra": "^1.0.1",
+    "mastra": "^1.5.0",
     "typescript": "^5.9.3"
   }
 }

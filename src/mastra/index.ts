@@ -21,6 +21,7 @@ import { hiringInterviewPrepAgent } from './agents/hiring-interview-prep-agent';
 import { registerApiRoute } from '@mastra/core/server';
 import { githubWebhookHandler } from './webhooks/handlers';
 import { telegramWebhookHandler } from './channels/telegram';
+import { whatsappVerifyHandler, whatsappWebhookHandler } from './channels/whatsapp';
 import {
   connectionsPageHandler,
   listConnectionsHandler,
@@ -81,11 +82,16 @@ export const mastra = new Mastra({
       { path: '/connections/list', handler: listConnectionsHandler },
       { path: '/crons', handler: cronsPageHandler },
       { path: '/crons/list', handler: listCronsHandler },
+      { path: '/webhooks/whatsapp', handler: whatsappVerifyHandler },
     ],
     apiRoutes: [
       registerApiRoute('/webhooks/telegram', {
         method: 'POST',
         handler: telegramWebhookHandler,
+      }),
+      registerApiRoute('/webhooks/whatsapp', {
+        method: 'POST',
+        handler: whatsappWebhookHandler,
       }),
       registerApiRoute('/webhooks/github', {
         method: 'POST',

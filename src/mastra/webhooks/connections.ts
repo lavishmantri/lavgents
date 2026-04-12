@@ -57,14 +57,27 @@ const INTEGRATIONS: Array<{
  * Middleware: GET /connections — serve the connections management UI.
  */
 export const connectionsPageHandler = async (
-  c: { req: { method: string; path: string }; json: (data: unknown, status?: number) => Response },
+  c: { req: { method: string; path: string; header: (name: string) => string | undefined }; json: (data: unknown, status?: number) => Response },
   next: () => Promise<void>,
 ) => {
   if (c.req.method !== "GET" || c.req.path !== "/connections") {
     return next();
   }
-  const connectUrl =
+  // Derive connect URL from the browser's Host header so it works over Tailscale/remote access
+  const defaultConnectUrl =
     process.env.NANGO_PUBLIC_CONNECT_URL || "http://localhost:3009";
+  let connectUrl = defaultConnectUrl;
+  const requestHost = c.req.header("host");
+  if (requestHost) {
+    const hostname = requestHost.split(":")[0];
+    try {
+      const parsed = new URL(defaultConnectUrl);
+      if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+        parsed.hostname = hostname;
+        connectUrl = parsed.origin;
+      }
+    } catch {}
+  }
 
   return new Response(buildConnectionsPage(connectUrl), {
     headers: { "Content-Type": "text/html; charset=utf-8" },
@@ -165,7 +178,8 @@ export const createSessionHandler = async (c: {
     // Generate a unique ID for this connection — used as both local ref and Nango end_user.id
     const connectionId = crypto.randomUUID();
 
-    const session = await createConnectSession(provider, connectionId);
+    const requestHost = c.req.header('host');
+    const session = await createConnectSession(provider, connectionId, requestHost);
     return c.json({ data: { ...session, connectionId } });
   } catch (err) {
     console.error("[Connections] Failed to create session:", err);

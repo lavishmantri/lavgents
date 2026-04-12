@@ -134,6 +134,7 @@ export async function getToken(
 export async function createConnectSession(
   provider: NangoProvider | NangoProvider[] | undefined,
   userId: string,
+  requestHost?: string,
 ): Promise<{ url: string; token: string; expiresAt: string }> {
   const allowed = provider
     ? Array.isArray(provider)
@@ -150,10 +151,35 @@ export async function createConnectSession(
   const data = result.data as Record<string, string>;
   let connectUrl = data.connect_link || data.connectUrl || "";
 
-  // Append apiURL so the Connect UI talks to our local Nango server, not Nango Cloud
+  // When accessed from a remote host (e.g. Tailscale), rewrite the connect_link
+  // hostname so the popup opens on the correct host instead of localhost.
+  if (connectUrl && requestHost) {
+    const hostname = requestHost.split(":")[0];
+    try {
+      const parsed = new URL(connectUrl);
+      if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+        parsed.hostname = hostname;
+        connectUrl = parsed.toString();
+      }
+    } catch {}
+  }
+
+  // Append apiURL so the Connect UI talks to our Nango server, not Nango Cloud.
+  // Rewrite the hostname to match the browser's access point when on a remote host.
+  let apiUrl = nangoPublicUrl;
+  if (requestHost) {
+    const hostname = requestHost.split(":")[0];
+    try {
+      const parsed = new URL(nangoPublicUrl);
+      if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") {
+        parsed.hostname = hostname;
+        apiUrl = parsed.origin;
+      }
+    } catch {}
+  }
   if (connectUrl && !connectUrl.includes("apiURL=")) {
     const sep = connectUrl.includes("?") ? "&" : "?";
-    connectUrl += `${sep}apiURL=${encodeURIComponent(nangoPublicUrl)}`;
+    connectUrl += `${sep}apiURL=${encodeURIComponent(apiUrl)}`;
   }
 
   return {
