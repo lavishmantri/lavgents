@@ -1,12 +1,15 @@
 # Lavgents Full Stack
 # App:       http://localhost:4111  (exposed publicly via system Tailscale Funnel)
+# Studio:    http://localhost:4112
 # Nango:     http://localhost:3003  (local only)
 # Start:     ./start.sh
 
 services:
   # ─── Main Application ───────────────────────────────────────────────
   app:
-    build: .
+    build:
+      context: .
+      target: production
     container_name: lavgents-app
     depends_on:
       nango-server:
@@ -24,6 +27,20 @@ services:
       - ./data:/app/data
       - ~/Obsidian:/obsidian
       # - ~/zig/hiring:/hiring
+    restart: unless-stopped
+    networks:
+      - nango-network
+
+  # ─── Mastra Studio UI ───────────────────────────────────────────────
+  studio:
+    build:
+      context: .
+      target: studio
+    container_name: lavgents-studio
+    depends_on:
+      - app
+    ports:
+      - "4112:4112"
     restart: unless-stopped
     networks:
       - nango-network

@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "mastra dev",
+    "dev": "mastra dev & mastra studio --port 4112 --server-port 4111; wait",
+    "dev:api": "mastra dev",
+    "dev:studio": "mastra studio --port 4112 --server-port 4111",
     "build": "mastra build",
     "start": "mastra start"
   },

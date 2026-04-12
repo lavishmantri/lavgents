@@ -24,3 +24,14 @@ EXPOSE 4111
 
 WORKDIR /app/output
 CMD ["node", "index.mjs"]
+
+# Stage 3: Studio UI
+FROM node:22-alpine AS studio
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm install
+COPY . .
+
+EXPOSE 4112
+
+CMD ["npx", "mastra", "studio", "--port", "4112", "--server-host", "app", "--server-port", "4111"]
